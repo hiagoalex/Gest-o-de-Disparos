@@ -1,4 +1,6 @@
 Flask
-Flask-SQLAlchemy
 pandas
 Flask-WTF
+gunicorn app:app
+reportlab
+psycopg2-binary
