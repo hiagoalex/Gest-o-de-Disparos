@@ -1,6 +1,6 @@
 Flask
 pandas
 Flask-WTF
-gunicorn app:app
+gunicorn
 reportlab
 psycopg2-binary
