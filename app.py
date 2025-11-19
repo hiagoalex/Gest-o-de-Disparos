@@ -1,153 +1,292 @@
-import os
-import sys
-import json
-from datetime import date, datetime, timedelta
-import psycopg2
-from psycopg2 import extras
-from psycopg2.errors import UniqueViolation, ForeignKeyViolation
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file
 from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField, SubmitField, HiddenField, EmailField, TextAreaField
-from wtforms.validators import DataRequired, Email, Length, Optional
+from wtforms import StringField, SelectField, SubmitField, TextAreaField
+from wtforms.validators import DataRequired, Email, Length, Optional, NumberRange
+from datetime import date
+import io
 import random
 import locale
-import io
+from collections import defaultdict
+import sys
 
-# IMPORTAÇÃO DA BIBLIOTECA DE PDF
-from xhtml2pdf import pisa
+# --- IMPORTAÇÕES PURAS PYTHON PARA PDF (ReportLab) ---
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import cm
+from reportlab.pdfgen import canvas # Para desenhar no canvas diretamente
+from reportlab.lib.utils import ImageReader # Para imagens se necessário (mas não usaremos por enquanto)
 
-# --- Configuração da Aplicação ---
+# --- CONFIGURAÇÃO E MODELAGEM DE DADOS (SIMULADO) ---
+
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'chave_secreta_padrao_segura') 
+app.config['SECRET_KEY'] = 'uma_chave_secreta_muito_forte_e_dificil' 
 
-# --- CONFIGURAÇÃO DO BANCO DE DADOS (SUPABASE) ---
-# O código tentará ler do Render (Variáveis de Ambiente).
-# Se não encontrar (rodando local), usa os valores padrão que pegamos da sua imagem.
-
-DB_HOST = os.environ.get('DB_HOST', 'db.sorzeppofdsegjsocujk.supabase.co')
-DB_NAME = os.environ.get('DB_NAME', 'postgres')
-DB_USER = os.environ.get('DB_USER', 'postgres')
-DB_PASS = os.environ.get('DB_PASS') # A SENHA DEVE ESTAR NAS VARIÁVEIS DE AMBIENTE!
-DB_PORT = os.environ.get('DB_PORT', '5432')
-
-# Verifica se a senha foi configurada
-if not DB_PASS:
-    print("AVISO CRÍTICO: A variável DB_PASS (senha do banco) não foi encontrada!", file=sys.stderr)
-
-# Configuração de localidade
 try:
     locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 except locale.Error:
     try:
         locale.setlocale(locale.LC_ALL, 'Portuguese_Brazil.1252')
     except locale.Error:
-        pass
+        print("Aviso: Configuração de localidade em Português falhou.")
 
-# --- Gerenciador de Banco de Dados ---
-class DatabaseManager:
-    def __init__(self):
-        self.conn = None
+# --- DEFINIÇÃO GLOBAL DOS ESTILOS DO REPORTLAB ---
+PDF_STYLES = getSampleStyleSheet()
+PDF_STYLES.add(ParagraphStyle(name='CustomTitle', fontSize=18, alignment=1, spaceAfter=20, fontName='Helvetica-Bold', textColor=colors.navy))
+PDF_STYLES.add(ParagraphStyle(name='CustomHeading2', fontSize=14, alignment=0, spaceBefore=15, spaceAfter=8, fontName='Helvetica-Bold', textColor=colors.darkblue))
+PDF_STYLES.add(ParagraphStyle(name='CustomNormalSmall', fontSize=10, alignment=0, spaceAfter=5, textColor=colors.black))
+PDF_STYLES.add(ParagraphStyle(name='CustomSummary', fontSize=16, alignment=0, spaceAfter=10, fontName='Helvetica-Bold', textColor=colors.black))
+PDF_STYLES.add(ParagraphStyle(name='HeaderLogoText', fontSize=16, alignment=2, fontName='Helvetica-Bold', textColor=colors.yellow)) # Estilo para o texto do logo
+PDF_STYLES.add(ParagraphStyle(name='FooterAddress', fontSize=9, alignment=0, fontName='Helvetica-Bold', textColor=colors.black)) # Estilo para o texto do rodapé
 
-    def get_connection(self):
-        """Cria e retorna uma nova conexão com o banco."""
-        try:
-            conn = psycopg2.connect(
-                host=DB_HOST,
-                database=DB_NAME,
-                user=DB_USER,
-                password=DB_PASS,
-                port=DB_PORT
-            )
-            return conn
-        except psycopg2.Error as e:
-            print(f"Erro ao conectar ao PostgreSQL: {e}", file=sys.stderr)
-            return None
 
-    def execute_query(self, query, params=None, fetch_one=False, commit=False):
-        """Executa query de forma segura, abrindo e fechando conexão."""
-        conn = self.get_connection()
-        if not conn:
-            return None
-
-        try:
-            with conn.cursor(cursor_factory=extras.DictCursor) as cur:
-                cur.execute(query, params)
-                
-                if commit:
-                    conn.commit()
-                    return True
-                
-                if fetch_one:
-                    return cur.fetchone()
-
-                return cur.fetchall()
-
-        except psycopg2.Error as e:
-            if conn:
-                conn.rollback()
-            print(f"ERRO SQL: {e}", file=sys.stderr)
-            raise e # Repassa o erro para ser tratado na rota
-        finally:
-            if conn:
-                conn.close()
-
-db_manager = DatabaseManager()
-
-# --- Funções Auxiliares ---
+# SIMULAÇÃO DE BANCO DE DADOS
+db_lojas = [
+    {'id': 1, 'nome': 'Mega Loja Centro', 'responsavel': 'Ana Paula Silva'},
+    {'id': 2, 'nome': 'Filial Zona Sul', 'responsavel': 'Carlos Eduardo Viera'},
+    {'id': 3, 'nome': 'Loja Digital', 'responsavel': 'Beatriz Oliveira'}
+]
 
 def gerar_disparos_semanais_simulados():
-    """Gera JSON para disparos iniciais."""
-    return extras.Json({
-        'segunda': 0, 'terca': 0, 'quarta': 0, 'quinta': 0, 'sexta': 0, 'sabado': 0, 'domingo': 0
-    })
+    dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
+    return {dia: random.randint(10, 80) for dia in dias}
 
-def get_lojas_choices():
-    """Busca lojas para o SelectField."""
-    query = "SELECT id, nome FROM lojas ORDER BY nome;"
-    try:
-        lojas = db_manager.execute_query(query)
-        return [(l['id'], l['nome']) for l in lojas] if lojas else []
-    except:
-        return []
+db_vendedores = [
+    {'id': 101, 'nome': 'Ricardo Gestor', 'loja_id': 1, 'loja': 'Mega Loja Centro', 'email': 'ricardo@megacentro.com', 'status': 'Conectado', 'base_tratada': True, 'disparos_dia': 120, 'disparos_semanais': gerar_disparos_semanais_simulados(), 'ultimo_status_tipo': 'Conectado', 'ultimo_status_data': '15/11/2025'},
+    {'id': 102, 'nome': 'Mariana Vendas', 'loja_id': 1, 'loja': 'Mega Loja Centro', 'email': 'mariana@megacentro.com', 'status': 'Restrito', 'base_tratada': False, 'disparos_dia': 50, 'disparos_semanais': gerar_disparos_semanais_simulados(), 'ultimo_status_tipo': 'Restrito', 'ultimo_status_data': '14/11/2025'},
+    {'id': 201, 'nome': 'Julio Cesar', 'loja_id': 2, 'loja': 'Filial Zona Sul', 'email': 'julio@zonasul.com', 'status': 'Bloqueado', 'base_tratada': True, 'disparos_dia': 10, 'disparos_semanais': gerar_disparos_semanais_simulados(), 'ultimo_status_tipo': 'Bloqueado', 'ultimo_status_data': '15/11/2025'},
+    {'id': 301, 'nome': 'Patricia Tech', 'loja_id': 3, 'loja': 'Loja Digital', 'email': 'patricia@digital.com', 'status': 'Conectado', 'base_tratada': True, 'disparos_dia': 200, 'disparos_semanais': gerar_disparos_semanais_simulados(), 'ultimo_status_tipo': 'Conectado', 'ultimo_status_data': '16/11/2025'},
+]
 
-def get_loja_by_id(loja_id):
-    query = "SELECT * FROM lojas WHERE id = %s"
-    return db_manager.execute_query(query, (loja_id,), fetch_one=True)
+db_eventos = [
+    {'nome': 'Reunião de Metas Mensais', 'data_evento': date(2025, 11, 20), 'loja': db_lojas[0]},
+    {'nome': 'Treinamento de Base', 'data_evento': date(2025, 11, 22), 'loja': db_lojas[1]}
+]
 
-def get_vendedor_by_id(vendedor_id):
-    query = "SELECT * FROM vendedores WHERE id = %s"
-    return db_manager.execute_query(query, (vendedor_id,), fetch_one=True)
+# --- FORMULÁRIOS WTFORMS (Sem alterações) ---
 
-# --- Formulários ---
+class VendedorForm(FlaskForm):
+    nome = StringField('Nome', validators=[DataRequired(), Length(min=2, max=100)])
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    loja_id = SelectField('Loja', coerce=int, validators=[DataRequired()])
+    status = SelectField('Status Inicial', choices=[
+        ('Conectado', 'Conectado'), 
+        ('Restrito', 'Restrito'), 
+        ('Bloqueado', 'Bloqueado'), 
+        ('Desconectado', 'Desconectado')
+    ], validators=[DataRequired()])
+    submit = SubmitField('Adicionar Vendedor')
 
 class LojaForm(FlaskForm):
     nome_loja = StringField('Nome da Loja', validators=[DataRequired(), Length(min=3)])
     responsavel = StringField('Responsável', validators=[DataRequired(), Length(min=3)])
-    nome_vendedor = StringField('Nome do Gestor', validators=[DataRequired()])
-    email_vendedor = StringField('Email do Gestor', validators=[DataRequired(), Email()])
+    nome_vendedor = StringField('Nome do Gestor (Vendedor)', validators=[DataRequired(), Length(min=2)])
+    email_vendedor = StringField('Email do Gestor (Vendedor)', validators=[DataRequired(), Email()])
     submit = SubmitField('Criar Loja')
-
+    
 class LojaEditForm(FlaskForm):
-    nome = StringField('Nome da Loja', validators=[DataRequired()])
-    responsavel = StringField('Responsável', validators=[DataRequired()])
+    nome = StringField('Nome da Loja', validators=[DataRequired(), Length(min=3)])
+    responsavel = StringField('Responsável', validators=[DataRequired(), Length(min=3)])
     submit = SubmitField('Salvar Alterações')
 
-class VendedorForm(FlaskForm):
-    nome = StringField('Nome', validators=[DataRequired()])
-    email = StringField('Email', validators=[DataRequired(), Email()])
-    loja_id = SelectField('Loja', coerce=int, validators=[DataRequired()])
-    status = SelectField('Status', choices=[
-        ('Conectado', 'Conectado'), ('Restrito', 'Restrito'), 
-        ('Bloqueado', 'Bloqueado'), ('Desconectado', 'Desconectado')
-    ])
-    submit = SubmitField('Adicionar Vendedor')
-
-class RelatorioPDFForm(FlaskForm):
+class RelatorioForm(FlaskForm):
+    # Definido dentro do init para carregar as opções dinamicamente
     loja_id_relatorio = SelectField('Selecione a Loja', coerce=int, validators=[DataRequired()])
-    ligacoes_realizadas = TextAreaField('Script de Ligações / Follow-up', validators=[Optional()])
+    ligacoes_realizadas = TextAreaField(' SCRIPT DISPAROS DE LIGAÇÕES', validators=[Optional(), Length(max=500)], render_kw={"rows": 5})
     submit = SubmitField('Gerar PDF')
 
-# --- ROTAS ---
+    def __init__(self, *args, **kwargs):
+        super(RelatorioForm, self).__init__(*args, **kwargs)
+        self.loja_id_relatorio.choices = [(l['id'], l['nome']) for l in db_lojas]
+
+# --- FUNÇÕES AUXILIARES DE PROCESSAMENTO DE DADOS (Sem alterações) ---
+
+def processar_dados_painel():
+    """Calcula KPIs e organiza dados para o Painel de Controle."""
+    total_disparos = sum(sum(v['disparos_semanais'].values()) for v in db_vendedores)
+    
+    status_kpis = defaultdict(int)
+    vendedores_por_status = defaultdict(list)
+    bloqueados_hoje = []
+    bases_pendentes_count = 0
+    
+    dia_bloqueio_count = defaultdict(int)
+
+    for v in db_vendedores:
+        status_kpis[v['status']] += 1
+        
+        # Cria uma view simplificada para a tabela de alerta
+        vendedores_por_status[v['status']].append({
+            'nome': v['nome'],
+            'loja_nome': v['loja'],
+            'ultimo_status_tipo': v['ultimo_status_tipo'],
+            'ultimo_status_data': v['ultimo_status_data'],
+        })
+
+        if v['status'] == 'Bloqueado':
+            # Simula a contagem de bloqueios por dia (usando o último status para simular o dia)
+            try:
+                dia_semana = date.today().strftime('%A')
+                dia_bloqueio_count[dia_semana] += 1
+            except:
+                pass # Ignora se a formatação falhar
+        
+        if not v['base_tratada']:
+            bases_pendentes_count += 1
+
+    # Encontra o dia com mais bloqueios
+    dia_mais_bloqueio = max(dia_bloqueio_count, key=dia_bloqueio_count.get, default='N/A')
+
+    return {
+        'total_disparos': total_disparos,
+        'status_kpis': status_kpis,
+        'vendedores_por_status': vendedores_por_status,
+        'bloqueados_hoje': bloqueados_hoje,
+        'bases_pendentes_count': bases_pendentes_count,
+        'dia_mais_bloqueio': dia_mais_bloqueio,
+    }
+
+def get_vendedores_by_loja_id(loja_id):
+    """Filtra vendedores para uma loja específica."""
+    return [v for v in db_vendedores if v['loja_id'] == loja_id]
+
+# --- FUNÇÃO PARA DESENHAR CABEÇALHO E RODAPÉ EM CADA PÁGINA (PAGE TEMPLATE) ---
+def myPageTemplate(canvas, doc):
+    canvas.saveState()
+    
+    # Dimensões da página
+    page_width, page_height = A4
+    
+    # --- CABEÇALHO ---
+    # Faixa preta superior
+    canvas.setFillColor(colors.black)
+    canvas.rect(0, page_height - 60, page_width, 60, fill=1) # x, y, width, height
+    
+    # Texto "SUPER MEGA VENDAS" (simulando logo)
+    canvas.setFont('Helvetica-Bold', 16)
+    canvas.setFillColor(colors.yellow)
+    canvas.drawRightString(page_width - doc.rightMargin - 5, page_height - 35, "SUPER MEGA VENDAS") # Ajuste a posição X e Y
+    
+    # Faixa amarela abaixo do texto
+    canvas.setFillColor(colors.yellow)
+    # A largura da faixa amarela pode ser ajustada para simular o "corte" da imagem original
+    # Aqui farei uma faixa completa para simplificar
+    canvas.rect(0, page_height - 65, page_width, 5, fill=1) # x, y, width, height
+
+
+    # --- MARCA D'ÁGUA "SMV" ---
+    canvas.setFillColor(colors.lightgrey) # Cor cinza claro para a marca d'água
+    canvas.setFont('Helvetica-Bold', 150) # Tamanho da fonte grande
+    canvas.drawCentredString(page_width / 2, page_height / 2 - 50, "SMV") # Centraliza na página
+
+    # --- RODAPÉ ---
+    # Faixa amarela do rodapé
+    canvas.setFillColor(colors.yellow)
+    canvas.rect(0, 0, page_width, 40, fill=1) # x, y, width, height (ajustar altura se necessário)
+    
+    # Texto do endereço no rodapé
+    address_text = "Manhattan Business Office, Av. Campos Sales, 901. Sala 1008 - Tirol, Natal/RN"
+    canvas.setFont('Helvetica-Bold', 9)
+    canvas.setFillColor(colors.black)
+    
+    # Posiciona o texto do endereço (alinhado à esquerda no exemplo, com margem)
+    canvas.drawString(doc.leftMargin + 20, 15, address_text) # x, y
+
+    canvas.restoreState()
+
+
+# --- FUNÇÃO CENTRAL PARA GERAÇÃO DE PDF (ReportLab) ---
+
+def gerar_pdf_reportlab(loja_data, vendedores_data, ligacoes_realizadas):
+    """
+    Gera um PDF usando ReportLab (Puro Python) com template fixo de cabeçalho/rodapé e marca d'água.
+    """
+    
+    buffer = io.BytesIO()
+    
+    # Usamos o pageTemplate para aplicar o cabeçalho e rodapé em todas as páginas
+    doc = SimpleDocTemplate(buffer, pagesize=A4, 
+                            rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=72)
+    
+    # Define as margens superiores e inferiores para o CONTEÚDO
+    # Deixa espaço para o cabeçalho (aprox. 70pt do topo) e rodapé (aprox. 40pt de baixo)
+    doc.topMargin = 70
+    doc.bottomMargin = 40
+    
+    Story = []
+    styles = PDF_STYLES
+    
+    # Título Principal do Relatório (será abaixo do cabeçalho fixo)
+    Story.append(Paragraph("Relatório Gerencial de Desempenho de Disparos", styles['CustomTitle']))
+    Story.append(Spacer(1, 0.5 * cm))
+
+    # Informações da Loja e Período
+    Story.append(Paragraph("Informações da Loja e Período", styles['CustomHeading2']))
+    Story.append(Paragraph(f"<b>Loja:</b> {loja_data.get('nome', 'N/A')}", styles['CustomNormalSmall']))
+    Story.append(Paragraph(f"<b>Responsável:</b> {loja_data.get('responsavel', 'N/A')}", styles['CustomNormalSmall']))
+    Story.append(Paragraph(f"<b>Data de Geração:</b> {date.today().strftime('%d de %B de %Y')}", styles['CustomNormalSmall']))
+    Story.append(Spacer(1, 0.7 * cm))
+
+    # Total de Convites (Sem título "KPIs")
+    total_convites = sum(sum(v['disparos_semanais'].values()) for v in vendedores_data)
+    Story.append(Paragraph(f"Total de Convites Enviados (Estimado na Semana): <u>{total_convites}</u>", styles['CustomSummary']))
+    Story.append(Paragraph("Este total é a soma dos disparos semanais registrados por todos os vendedores ativos desta loja.", styles['CustomNormalSmall']))
+    Story.append(Spacer(1, 0.7 * cm))
+    
+    # Relato Manual
+    Story.append(Paragraph("Relato Manual (Ações de Follow-up)", styles['CustomHeading2']))
+    relato = ligacoes_realizadas if ligacoes_realizadas else "Nenhum relato manual fornecido no momento da geração do relatório."
+    Story.append(Paragraph(relato, styles['CustomNormalSmall']))
+    Story.append(Spacer(1, 0.7 * cm))
+    
+    # Tabela de Desempenho Individual
+    Story.append(Paragraph("Desempenho Individual dos Vendedores", styles['CustomHeading2']))
+    
+    table_data = [
+        ["Vendedor", "Disparos (Semana)", "Disparos (Hoje)", "Status Atual", "Base Tratada?"]
+    ]
+    
+    for vendedor in vendedores_data:
+        total_semana = sum(vendedor['disparos_semanais'].values())
+        status_text = vendedor['status']
+        base_tratada_text = 'Sim' if vendedor['base_tratada'] else 'Não'
+        
+        row = [
+            Paragraph(vendedor['nome'], styles['CustomNormalSmall']),
+            Paragraph(str(total_semana), styles['CustomNormalSmall']),
+            Paragraph(str(vendedor['disparos_dia']), styles['CustomNormalSmall']),
+            Paragraph(status_text, styles['CustomNormalSmall']),
+            Paragraph(base_tratada_text, styles['CustomNormalSmall']),
+        ]
+        table_data.append(row)
+
+    if len(table_data) > 1:
+        table = Table(table_data, colWidths=[3.5*cm, 2.5*cm, 2.5*cm, 3*cm, 2.5*cm])
+        
+        table_style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.navy),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ])
+        
+        table.setStyle(table_style)
+        Story.append(table)
+    else:
+         Story.append(Paragraph("Nenhum vendedor encontrado para esta loja.", styles['CustomNormalSmall']))
+
+
+    # Construção do Documento, aplicando o template de página
+    doc.build(Story, onFirstPage=myPageTemplate, onLaterPages=myPageTemplate)
+    
+    buffer.seek(0)
+    return buffer
+
+# --- ROTAS DA APLICAÇÃO (sem alterações, exceto pela chamada da função de PDF) ---
 
 @app.route('/')
 def index():
@@ -155,359 +294,230 @@ def index():
 
 @app.route('/painel')
 def painel():
-    # 1. Carregar dados do Banco
-    try:
-        vendedores_db = db_manager.execute_query("SELECT * FROM vendedores ORDER BY nome") or []
-        lojas_db = db_manager.execute_query("SELECT * FROM lojas ORDER BY nome") or []
-        eventos_db = [] # Implementar tabela de eventos se necessário
-    except Exception as e:
-        print(f"Erro ao carregar painel: {e}")
-        vendedores_db = []
-        lojas_db = []
-
-    # 2. Calcular KPIs
-    total_disparos = 0
-    status_kpis = defaultdict(int)
-    bases_pendentes_count = 0
-    bloqueados_hoje = []
-    hoje_str = date.today().strftime('%d/%m/%Y') # Formato string para comparar se viesse string
-
-    vendedores_formatados = []
-
-    from collections import defaultdict
-    vendedores_por_status = defaultdict(list)
+    """Rota para o Painel de Controle Principal."""
+    dados_painel = processar_dados_painel()
     
-    for v in vendedores_db:
-        # Somar disparos da semana (JSON)
-        disparos_semanais = v['disparos_semanais'] if v['disparos_semanais'] else {}
-        total_disparos += sum(disparos_semanais.values())
-        
-        status_kpis[v['status']] += 1
-        
-        # Formatar datas
-        data_ultimo = v['ultimo_status_data'].strftime('%d/%m/%Y') if v['ultimo_status_data'] else 'N/A'
-        
-        v_obj = {
-            'id': v['id'],
-            'nome': v['nome'],
-            'email': v['email'],
-            'loja': v['loja_nome'],
-            'loja_id': v['loja_id'],
-            'status': v['status'],
-            'base_tratada': v['base_tratada'],
-            'disparos_dia': v['disparos_dia'],
-            'disparos_semanais': disparos_semanais,
-            'ultimo_status_tipo': v['ultimo_status_tipo'],
-            'ultimo_status_data': data_ultimo
-        }
-        
-        vendedores_formatados.append(v_obj)
-        vendedores_por_status[v['status']].append(v_obj)
-        
-        if not v['base_tratada']:
-            bases_pendentes_count += 1
-            
-        # Verifica bloqueados hoje (comparando data objeto)
-        if v['status'] == 'Bloqueado' and v['ultimo_status_data'] == date.today():
-            bloqueados_hoje.append(v_obj)
-
-    # Prepara forms vazios para os modais
+    # Inicializa formulários para modais que podem ser abertos aqui
     vendedor_form = VendedorForm()
-    if lojas_db:
-        vendedor_form.loja_id.choices = [(l['id'], l['nome']) for l in lojas_db]
-    else:
-        vendedor_form.loja_id.choices = [(0, 'Nenhuma loja')]
-
-    relatorio_form = RelatorioPDFForm()
-    if lojas_db:
-        relatorio_form.loja_id_relatorio.choices = [(0, 'Selecione a Loja')] + [(l['id'], l['nome']) for l in lojas_db]
-    else:
-        relatorio_form.loja_id_relatorio.choices = [(0, 'Nenhuma loja')]
+    vendedor_form.loja_id.choices = [(l['id'], l['nome']) for l in db_lojas]
     
-    loja_form = None 
-    loja_edit_form = None
-
-    return render_template('dashboard.html',
-        pagina='painel',
+    loja_form = LojaForm()
+    loja_edit_form = LojaEditForm()
+    relatorio_form = RelatorioForm()
+    
+    return render_template('dashboard.html', 
+        pagina='painel', 
         today_date=date.today(),
-        total_disparos=total_disparos,
-        status_kpis=status_kpis,
-        bases_pendentes_count=bases_pendentes_count,
-        bloqueados_hoje=bloqueados_hoje,
-        vendedores_por_status=vendedores_por_status,
-        eventos=[], # Lista vazia por enquanto
-        dia_mais_bloqueio="N/A",
-        relatorio_form=relatorio_form,
+        db_vendedores=db_vendedores, # Passa todos os vendedores para o cálculo do gráfico
+        eventos=db_eventos,
+        
+        # Dados do painel
+        **dados_painel,
+        
+        # Formulários para modais
         vendedor_form=vendedor_form,
         loja_form=loja_form,
-        loja_edit_form=loja_edit_form
+        loja_edit_form=loja_edit_form,
+        relatorio_form=relatorio_form
     )
+
+@app.route('/gerar_relatorio_pdf', methods=['POST'])
+def gerar_relatorio_pdf():
+    """
+    Gera o PDF usando ReportLab.
+    """
+    form = RelatorioForm(request.form)
+    form.loja_id_relatorio.choices = [(l['id'], l['nome']) for l in db_lojas] 
+
+    if form.validate_on_submit():
+        loja_id = form.loja_id_relatorio.data
+        ligacoes_realizadas = form.ligacoes_realizadas.data
+        
+        loja_data = next((l for l in db_lojas if l['id'] == loja_id), None)
+        vendedores_loja = get_vendedores_by_loja_id(loja_id)
+
+        if not loja_data:
+            flash(f"Erro: Loja com ID {loja_id} não encontrada.", 'danger')
+            return redirect(url_for('painel'))
+
+        try:
+            pdf_buffer = gerar_pdf_reportlab(loja_data, vendedores_loja, ligacoes_realizadas)
+            
+            filename = f"Relatorio_Desempenho_{loja_data['nome']}_{date.today().strftime('%Y%m%d')}.pdf"
+            return send_file(pdf_buffer, as_attachment=True, 
+                             download_name=filename, 
+                             mimetype='application/pdf')
+
+        except Exception as e:
+            print(f"Erro detalhado na geração do PDF (ReportLab): {e}", file=sys.stderr)
+            flash(f"Erro ao gerar PDF: {e}. Verifique se a biblioteca 'reportlab' está instalada e se os estilos estão corretos.", 'danger')
+            return redirect(url_for('painel'))
+
+    else:
+        flash("Erro de validação no formulário de relatório. Por favor, selecione uma loja.", 'warning')
+        return redirect(url_for('painel'))
+
+# --- Rotas de CRUD para Lojas, Vendedores, etc ---
+
+@app.route('/vendedores', methods=['GET', 'POST'])
+def vendedores():
+    vendedor_form = VendedorForm()
+    vendedor_form.loja_id.choices = [(l['id'], l['nome']) for l in db_lojas]
+    relatorio_form = RelatorioForm()
+    
+    if vendedor_form.validate_on_submit():
+        novo_id = max(v['id'] for v in db_vendedores) + 1 if db_vendedores else 101
+        novo_vendedor = {
+            'id': novo_id,
+            'nome': vendedor_form.nome.data,
+            'email': vendedor_form.email.data,
+            'loja_id': vendedor_form.loja_id.data,
+            'loja': next(l['nome'] for l in db_lojas if l['id'] == vendedor_form.loja_id.data),
+            'status': vendedor_form.status.data,
+            'base_tratada': True, 
+            'disparos_dia': 0, 
+            'disparos_semanais': gerar_disparos_semanais_simulados(),
+            'ultimo_status_tipo': vendedor_form.status.data, 
+            'ultimo_status_data': date.today().strftime('%d/%m/%Y')
+        }
+        db_vendedores.append(novo_vendedor)
+        flash(f'Vendedor {novo_vendedor["nome"]} adicionado com sucesso!', 'success')
+        return redirect(url_for('vendedores'))
+
+    return render_template('dashboard.html', 
+        pagina='vendedores', 
+        vendedores=db_vendedores,
+        vendedor_form=vendedor_form,
+        loja_form=LojaForm(),
+        loja_edit_form=LojaEditForm(),
+        relatorio_form=relatorio_form,
+        today_date=date.today() 
+    )
+
+@app.route('/mudar_status_vendedor/<int:vendedor_id>/<string:novo_status>', methods=['POST'])
+def mudar_status_vendedor(vendedor_id, novo_status):
+    vendedor = next((v for v in db_vendedores if v['id'] == vendedor_id), None)
+    if vendedor:
+        vendedor['status'] = novo_status
+        vendedor['ultimo_status_tipo'] = novo_status
+        vendedor['ultimo_status_data'] = date.today().strftime('%d/%m/%Y')
+        flash(f'Status de {vendedor["nome"]} alterado para "{novo_status}".', 'success')
+    return redirect(url_for('vendedores'))
+
+@app.route('/alternar_base_tratada/<int:vendedor_id>', methods=['POST'])
+def alternar_base_tratada(vendedor_id):
+    vendedor = next((v for v in db_vendedores if v['id'] == vendedor_id), None)
+    if vendedor:
+        vendedor['base_tratada'] = not vendedor['base_tratada']
+        status = 'Tratada' if vendedor['base_tratada'] else 'Pendente'
+        flash(f'Base de {vendedor["nome"]} alterada para {status}.', 'success')
+    return redirect(url_for('vendedores'))
+
+@app.route('/editar_disparos_dia', methods=['POST'])
+def editar_disparos_dia():
+    vendedor_id = int(request.form.get('vendedor_id'))
+    disparos_hoje = int(request.form.get('disparos_hoje'))
+    
+    vendedor = next((v for v in db_vendedores if v['id'] == vendedor_id), None)
+    if vendedor:
+        vendedor['disparos_dia'] = disparos_hoje
+        flash(f'Disparos do dia de {vendedor["nome"]} atualizados para {disparos_hoje}.', 'success')
+    return redirect(url_for('vendedores'))
+
+@app.route('/editar_disparos_semana', methods=['POST'])
+def editar_disparos_semana():
+    vendedor_id = int(request.form.get('vendedor_id'))
+    vendedor = next((v for v in db_vendedores if v['id'] == vendedor_id), None)
+
+    if vendedor:
+        disparos_semanais = {}
+        dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
+        for dia in dias:
+            disparos_semanais[dia] = int(request.form.get(f'disparo_{dia}', 0))
+        
+        vendedor['disparos_semanais'] = disparos_semanais
+        flash(f'Disparos semanais de {vendedor["nome"]} atualizados com sucesso.', 'success')
+    return redirect(url_for('vendedores'))
+
 
 @app.route('/lojas', methods=['GET', 'POST'])
 def lojas():
     loja_form = LojaForm()
     loja_edit_form = LojaEditForm()
-    
+    relatorio_form = RelatorioForm()
+
     if loja_form.validate_on_submit():
-        try:
-            # 1. Inserir Loja
-            query_loja = "INSERT INTO lojas (nome, responsavel) VALUES (%s, %s) RETURNING id"
-            loja_id = db_manager.execute_query(query_loja, (loja_form.nome_loja.data, loja_form.responsavel.data), fetch_one=True, commit=True)
-            
-            if loja_id:
-                # 2. Inserir Gestor
-                query_vendedor = """
-                    INSERT INTO vendedores (nome, email, loja_id, loja_nome, status, base_tratada, disparos_dia, disparos_semanais, ultimo_status_tipo, ultimo_status_data)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """
-                params_vendedor = (
-                    loja_form.nome_vendedor.data,
-                    loja_form.email_vendedor.data,
-                    loja_id[0],
-                    loja_form.nome_loja.data,
-                    'Conectado',
-                    True,
-                    0,
-                    gerar_disparos_semanais_simulados(),
-                    'Conectado',
-                    date.today()
-                )
-                db_manager.execute_query(query_vendedor, params_vendedor, commit=True)
-                flash('Loja e Gestor criados com sucesso!', 'success')
-            return redirect(url_for('lojas'))
+        novo_loja_id = max(l['id'] for l in db_lojas) + 1 if db_lojas else 1
+        
+        nova_loja = {
+            'id': novo_loja_id,
+            'nome': loja_form.nome_loja.data,
+            'responsavel': loja_form.responsavel.data
+        }
+        db_lojas.append(nova_loja)
+        
+        novo_vendedor_id = max(v['id'] for v in db_vendedores) + 1 if db_vendedores else 101
+        novo_vendedor = {
+            'id': novo_vendedor_id,
+            'nome': loja_form.nome_vendedor.data,
+            'email': loja_form.email_vendedor.data,
+            'loja_id': novo_loja_id,
+            'loja': nova_loja['nome'],
+            'status': 'Conectado',
+            'base_tratada': True, 
+            'disparos_dia': 0, 
+            'disparos_semanais': gerar_disparos_semanais_simulados(),
+            'ultimo_status_tipo': 'Conectado', 
+            'ultimo_status_data': date.today().strftime('%d/%m/%Y')
+        }
+        db_vendedores.append(novo_vendedor)
+        
+        flash(f'Loja "{nova_loja["nome"]}" e Gestor cadastrados com sucesso!', 'success')
+        return redirect(url_for('lojas'))
 
-        except UniqueViolation:
-            flash('Erro: Já existe uma loja com este nome.', 'danger')
-            return redirect(url_for('lojas'))
-        except Exception as e:
-            flash(f'Erro ao criar loja: {e}', 'danger')
-            return redirect(url_for('lojas'))
-
-    # Listagem
-    lojas_db = db_manager.execute_query("SELECT * FROM lojas ORDER BY nome") or []
-    vendedores_db = db_manager.execute_query("SELECT * FROM vendedores") or []
-    
-    # Anexa vendedores às lojas para exibição
     lojas_com_vendedores = []
-    for loja in lojas_db:
-        l_dict = dict(loja)
-        l_dict['vendedores'] = [v for v in vendedores_db if v['loja_id'] == l_dict['id']]
-        lojas_com_vendedores.append(l_dict)
+    for loja in db_lojas:
+        loja_copy = loja.copy()
+        loja_copy['vendedores'] = [v for v in db_vendedores if v['loja_id'] == loja['id']]
+        lojas_com_vendedores.append(loja_copy)
 
-    return render_template('dashboard.html',
-        pagina='lojas',
+    return render_template('dashboard.html', 
+        pagina='lojas', 
         lojas=lojas_com_vendedores,
+        vendedor_form=VendedorForm(),
         loja_form=loja_form,
-        loja_edit_form=loja_edit_form,
-        vendedor_form=None,
-        today_date=date.today()
-    )
-
-@app.route('/vendedores', methods=['GET', 'POST'])
-def vendedores():
-    vendedor_form = VendedorForm()
-    lojas = get_lojas_choices()
-    vendedor_form.loja_id.choices = lojas
-
-    if vendedor_form.validate_on_submit():
-        try:
-            loja_info = get_loja_by_id(vendedor_form.loja_id.data)
-            
-            query = """
-                INSERT INTO vendedores (nome, email, loja_id, loja_nome, status, base_tratada, disparos_dia, disparos_semanais, ultimo_status_tipo, ultimo_status_data)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            params = (
-                vendedor_form.nome.data,
-                vendedor_form.email.data,
-                vendedor_form.loja_id.data,
-                loja_info['nome'],
-                vendedor_form.status.data,
-                False, # Base pendente
-                0,
-                gerar_disparos_semanais_simulados(),
-                vendedor_form.status.data,
-                date.today()
-            )
-            db_manager.execute_query(query, params, commit=True)
-            flash('Vendedor adicionado!', 'success')
-            return redirect(url_for('vendedores'))
-            
-        except UniqueViolation:
-            flash('Erro: Email já cadastrado.', 'danger')
-            return redirect(url_for('vendedores'))
-        except Exception as e:
-            flash(f'Erro ao adicionar: {e}', 'danger')
-            return redirect(url_for('vendedores'))
-
-    # Listagem com filtros
-    query = "SELECT * FROM vendedores"
-    params = []
-    
-    loja_id_filtro = request.args.get('loja_id')
-    status_filtro = request.args.get('status')
-    
-    if loja_id_filtro or status_filtro:
-        query += " WHERE"
-        conditions = []
-        if loja_id_filtro:
-            conditions.append(" loja_id = %s")
-            params.append(loja_id_filtro)
-        if status_filtro:
-            conditions.append(" status = %s")
-            params.append(status_filtro)
-        query += " AND".join(conditions)
-    
-    query += " ORDER BY nome"
-    
-    vendedores_raw = db_manager.execute_query(query, tuple(params)) or []
-    
-    # Formata para o template
-    vendedores_fmt = []
-    for v in vendedores_raw:
-        v_dict = dict(v)
-        v_dict['ultimo_status_data'] = v['ultimo_status_data'].strftime('%d/%m/%Y') if v['ultimo_status_data'] else 'N/A'
-        vendedores_fmt.append(v_dict)
-
-    return render_template('dashboard.html',
-        pagina='vendedores',
-        vendedores=vendedores_fmt,
-        lojas_raw=db_manager.execute_query("SELECT * FROM lojas ORDER BY nome") or [],
-        vendedor_form=vendedor_form,
-        today_date=date.today(),
-        loja_id_filtro_ativo=int(loja_id_filtro) if loja_id_filtro else None
+        loja_edit_form=LojaEditForm(),
+        relatorio_form=relatorio_form,
+        today_date=date.today() 
     )
 
 @app.route('/editar_loja', methods=['POST'])
 def editar_loja():
-    form = LojaEditForm()
-    try:
-        loja_id = request.form.get('loja_id')
-        query = "UPDATE lojas SET nome = %s, responsavel = %s WHERE id = %s"
-        db_manager.execute_query(query, (form.nome.data, form.responsavel.data, loja_id), commit=True)
-        
-        # Atualiza nome da loja nos vendedores
-        db_manager.execute_query("UPDATE vendedores SET loja_nome = %s WHERE loja_id = %s", (form.nome.data, loja_id), commit=True)
-        
-        flash('Loja atualizada.', 'success')
-    except Exception as e:
-        flash(f'Erro ao editar loja: {e}', 'danger')
+    form = LojaEditForm(request.form)
+    
+    loja_id = int(request.form.get('loja_id'))
+
+    if form.validate_on_submit():
+        loja_encontrada = next((l for l in db_lojas if l['id'] == loja_id), None)
+        if loja_encontrada:
+            nome_antigo = loja_encontrada['nome']
+            loja_encontrada['nome'] = form.nome.data
+            loja_encontrada['responsavel'] = form.responsavel.data
+            
+            for v in db_vendedores:
+                if v['loja_id'] == loja_id:
+                    v['loja'] = form.nome.data
+                    
+            flash(f'Loja "{nome_antigo}" atualizada para "{loja_encontrada["nome"]}" com sucesso!', 'success')
+            return redirect(url_for('lojas'))
+        else:
+            flash(f'Erro: Loja com ID {loja_id} não encontrada.', 'danger')
+            
+    else:
+        flash("Erro de validação ao editar a loja.", 'warning')
+
     return redirect(url_for('lojas'))
 
-@app.route('/mudar_status_vendedor/<int:vendedor_id>/<novo_status>', methods=['POST'])
-def mudar_status_vendedor(vendedor_id, novo_status):
-    try:
-        query = "UPDATE vendedores SET status = %s, ultimo_status_tipo = %s, ultimo_status_data = %s WHERE id = %s"
-        db_manager.execute_query(query, (novo_status, novo_status, date.today(), vendedor_id), commit=True)
-        flash(f'Status alterado para {novo_status}.', 'success')
-    except Exception as e:
-        flash(f'Erro: {e}', 'danger')
-    return redirect(url_for('vendedores', **request.args))
-
-@app.route('/alternar_base_tratada/<int:vendedor_id>', methods=['POST'])
-def alternar_base_tratada(vendedor_id):
-    try:
-        # Pega estado atual
-        curr = get_vendedor_by_id(vendedor_id)
-        novo_estado = not curr['base_tratada']
-        db_manager.execute_query("UPDATE vendedores SET base_tratada = %s WHERE id = %s", (novo_estado, vendedor_id), commit=True)
-        flash('Status da base atualizado.', 'success')
-    except Exception as e:
-        flash(f'Erro: {e}', 'danger')
-    return redirect(url_for('vendedores', **request.args))
-
-@app.route('/editar_disparos_dia', methods=['POST'])
-def editar_disparos_dia():
-    try:
-        vid = request.form.get('vendedor_id')
-        qtd = request.form.get('disparos_hoje')
-        db_manager.execute_query("UPDATE vendedores SET disparos_dia = %s WHERE id = %s", (qtd, vid), commit=True)
-        flash('Disparos do dia atualizados.', 'success')
-    except Exception as e:
-        flash(f'Erro: {e}', 'danger')
-    return redirect(url_for('vendedores', **request.args))
-
-@app.route('/editar_disparos_semana', methods=['POST'])
-def editar_disparos_semana():
-    try:
-        vid = request.form.get('vendedor_id')
-        dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
-        novos_dados = {}
-        for dia in dias:
-            novos_dados[dia] = int(request.form.get(f'disparo_{dia}', 0))
-        
-        # Salva como JSONB
-        db_manager.execute_query("UPDATE vendedores SET disparos_semanais = %s WHERE id = %s", (extras.Json(novos_dados), vid), commit=True)
-        flash('Disparos semanais atualizados.', 'success')
-    except Exception as e:
-        flash(f'Erro: {e}', 'danger')
-    return redirect(url_for('vendedores', **request.args))
-
-@app.route('/relatorio/gerar', methods=['POST'])
-def gerar_relatorio_pdf():
-    form = RelatorioForm()
-    form.loja_id_relatorio.choices = [(0, 'Sel')] + get_loja_choices() # Hack para validar
-    
-    try:
-        loja_id = request.form.get('loja_id_relatorio')
-        if not loja_id or loja_id == '0':
-            flash('Selecione uma loja.', 'warning')
-            return redirect(url_for('painel'))
-            
-        loja = get_loja_by_id(loja_id)
-        vendedores = get_vendedores_by_loja_id(loja_id)
-        texto = request.form.get('ligacoes_realizadas')
-        
-        # Renderiza HTML
-        html = render_template('relatorio_template.html', 
-            loja=loja, 
-            vendedores_loja=vendedores, 
-            ligacoes_realizadas=texto,
-            data_hoje=date.today().strftime('%d/%m/%Y'),
-            total_convites_enviados=sum(sum(v['disparos_semanais'].values()) for v in vendedores)
-        )
-        
-        # Gera PDF
-        pdf_file = io.BytesIO()
-        pisa.CreatePDF(io.StringIO(html), dest=pdf_file)
-        pdf_file.seek(0)
-        
-        return send_file(pdf_file, mimetype='application/pdf', as_attachment=True, download_name=f'Relatorio_{loja["nome"]}.pdf')
-        
-    except Exception as e:
-        flash(f'Erro ao gerar PDF: {e}', 'danger')
-        return redirect(url_for('painel'))
-
-# --- Inicialização das Tabelas ---
-def init_db():
-    """Cria tabelas se não existirem."""
-    # Tabela Lojas
-    db_manager.execute_query("""
-        CREATE TABLE IF NOT EXISTS lojas (
-            id SERIAL PRIMARY KEY,
-            nome VARCHAR(100) UNIQUE NOT NULL,
-            responsavel VARCHAR(100) NOT NULL
-        );
-    """, commit=True)
-    
-    # Tabela Vendedores
-    db_manager.execute_query("""
-        CREATE TABLE IF NOT EXISTS vendedores (
-            id SERIAL PRIMARY KEY,
-            nome VARCHAR(100) NOT NULL,
-            email VARCHAR(100) UNIQUE NOT NULL,
-            loja_id INTEGER REFERENCES lojas(id) ON DELETE CASCADE,
-            loja_nome VARCHAR(100),
-            status VARCHAR(20) DEFAULT 'Conectado',
-            base_tratada BOOLEAN DEFAULT FALSE,
-            disparos_dia INTEGER DEFAULT 0,
-            disparos_semanais JSONB DEFAULT '{}',
-            ultimo_status_tipo VARCHAR(20),
-            ultimo_status_data DATE
-        );
-    """, commit=True)
-    print("Tabelas verificadas/criadas.")
 
 if __name__ == '__main__':
-    init_db() # Garante que as tabelas existam ao rodar localmente
     app.run(debug=True)
