@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório Gerencial de Disparos</title>
+    <style>
+        /* Estilos CSS simplificados para compatibilidade com xhtml2pdf */
+        @page { size: a4 portrait; @frame { bottom: 1cm; right: 1cm; left: 1cm; top: 1cm; } }
+        body { font-family: sans-serif; font-size: 10pt; color: #333; }
+        h1, h2, h3 { color: #1e40af; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-bottom: 15px; }
+        h1 { font-size: 18pt; text-align: center; }
+        h2 { font-size: 14pt; }
+        h3 { font-size: 12pt; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { border: 1px solid #eee; padding: 8px; text-align: left; }
+        th { background-color: #f4f7f9; color: #4b5563; font-weight: bold; }
+        .data-box { background-color: #f0f4ff; padding: 10px; border-radius: 5px; margin-bottom: 15px; }
+        .status-connected { background-color: #10b981; color: white; padding: 2px 5px; border-radius: 3px; }
+        .status-blocked { background-color: #ef4444; color: white; padding: 2px 5px; border-radius: 3px; }
+        .status-restricted { background-color: #f59e0b; color: white; padding: 2px 5px; border-radius: 3px; }
+        .status-disconnected { background-color: #9ca3af; color: white; padding: 2px 5px; border-radius: 3px; }
+        .summary-total { font-size: 16pt; font-weight: bold; color: #000; }
+    </style>
+</head>
+<body>
+    <h1>Relatório Gerencial de Desempenho de Disparos</h1>
+    
+    <h2>Informações da Loja e Período</h2>
+    <div class="data-box">
+        <!-- Acessando 'loja' - Se a variável não for passada, o erro acontece aqui -->
+        <p><strong>Loja:</strong> {{ loja.nome if loja is defined and loja.nome is defined else 'N/A' }}</p>
+        <p><strong>Responsável:</strong> {{ loja.responsavel if loja is defined and loja.responsavel is defined else 'N/A' }}</p>
+        <p><strong>Data de Geração:</strong> {{ data_hoje }}</p>
+    </div>
+
+    <h2>KPIs de Desempenho da Semana</h2>
+    <div class="data-box">
+        <p><strong>Total de Convites Enviados (Estimado na Semana):</strong> 
+            <span class="summary-total">{{ total_convites_enviados | default(0) }}</span>
+        </p>
+        <p style="margin-top: 10px;">Este total é a soma dos disparos semanais registrados por todos os vendedores ativos desta loja.</p>
+    </div>
+
+    <h2>Relato Manual (Ações de Follow-up)</h2>
+    <div class="data-box">
+        {% if ligacoes_realizadas %}
+            <pre style="white-space: pre-wrap; font-family: sans-serif;">{{ ligacoes_realizadas }}</pre>
+        {% else %}
+            <p style="color: #666;">Nenhum relato manual fornecido no momento da geração do relatório.</p>
+        {% endif %}
+    </div>
+
+    <h2>Desempenho Individual dos Vendedores</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Vendedor</th>
+                <th>Disparos (Semana)</th>
+                <th>Disparos (Hoje)</th>
+                <th>Status Atual</th>
+                <th>Base Tratada?</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for vendedor in vendedores_loja %}
+            <tr>
+                <td>{{ vendedor.nome }}</td>
+                <td>{{ vendedor.disparos_semanais.values() | sum }}</td>
+                <td>{{ vendedor.disparos_dia }}</td>
+                <td>
+                    {% set status_class = 'status-' + vendedor.status.lower() %}
+                    <span class="{{ status_class }}">{{ vendedor.status }}</span>
+                </td>
+                <td>
+                    {% if vendedor.base_tratada %}
+                        Sim
+                    {% else %}
+                        Não
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not vendedores_loja %}
+            <tr>
+                <td colspan="5" style="text-align: center;">Nenhum vendedor encontrado para esta loja.</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <p style="text-align: right; margin-top: 30px; font-style: italic;">Documento gerado automaticamente pelo sistema de Gestão de Disparos.</p>
+</body>
+</html>

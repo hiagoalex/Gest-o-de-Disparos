@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Gestão de Disparos | {{ pagina | capitalize }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        /* CSS ATUALIZADO PARA INTERFACE ROBUSTA E INTUITIVA */
+        body { background-color: #eef2f6; } 
+        .sidebar { height: 100vh; width: 250px; position: fixed; top: 0; left: 0; background-color: #2c3e50; padding-top: 20px; color: white; z-index: 1000; } 
+        .content { margin-left: 250px; padding: 30px; }
+        .nav-link { color: #bdc3c7; transition: 0.3s; }
+        .nav-link.active { color: white; background-color: #3498db; } 
+        .nav-link:hover:not(.active) { color: white; }
+        
+        /* Estilo dos Cards de KPI */
+        .kpi-card { 
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+            height: 100%;
+        }
+        .kpi-card:hover {
+            transform: translateY(-5px);
+        }
+        .kpi-card .card-title { 
+            font-weight: 500; 
+            font-size: 1rem;
+            color: #7f8c8d;
+        }
+        .kpi-card .fs-3 { 
+            font-weight: 700; 
+            margin-top: 5px;
+            font-size: 2.5rem !important;
+        }
+
+        /* Cores de Status */
+        .status-conectado { color: #2ecc71; font-weight: bold; }
+        .status-bloqueado { color: #e74c3c; font-weight: bold; }
+        .status-restrito { color: #3498db; font-weight: bold; } 
+        .status-desconectado { color: #95a5a6; font-weight: bold; }
+        
+        .list-group-item { border-color: #ecf0f1; }
+        
+        @media (max-width: 768px) {
+            .sidebar { width: 100%; height: auto; position: relative; }
+            .content { margin-left: 0; }
+        }
+    </style>
+</head>
+<body>
+    
+    <div class="sidebar">
+        <h4 class="text-center mb-4"><i class="bi bi-bullhorn"></i> Gestão de Disparos SMV</h4>
+        <ul class="nav flex-column">
+            <li class="nav-item">
+                <a class="nav-link {% if pagina == 'painel' %}active{% endif %}" href="{{ url_for('painel') }}">
+                    <i class="bi bi-speedometer2"></i> Painel
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if pagina == 'lojas' %}active{% endif %}" href="{{ url_for('lojas') }}">
+                    <i class="bi bi-shop"></i> Lojas
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if pagina == 'vendedores' %}active{% endif %}" href="{{ url_for('vendedores') }}">
+                    <i class="bi bi-person-circle"></i> Vendedores
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    <div class="content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="text-primary">{{ pagina | capitalize }}</h1>
+            
+            {# Botões de Adição / Relatório #}
+            {% if pagina == 'painel' %}
+                <button type="button" class="btn btn-info text-white" data-bs-toggle="modal" data-bs-target="#gerarRelatorioModal">
+                    <i class="bi bi-file-pdf"></i> Gerar Relatório PDF
+                </button>
+            {% elif pagina == 'lojas' %}
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#adicionarLojaModal">
+                    <i class="bi bi-plus-circle"></i> Adicionar Loja
+                </button>
+            {% elif pagina == 'vendedores' %}
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#adicionarVendedorModal">
+                    <i class="bi bi-person-plus"></i> Adicionar Vendedor
+                </button>
+            {% endif %}
+        </div>
+
+        {# FLASH MESSAGES #}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message | safe }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {# --- CONTEÚDO DA ABA PAINEL --- #}
+        {% if pagina == 'painel' %}
+            
+            <h2 class="text-secondary mb-3"><i class="bi bi-bar-chart-line-fill"></i> Performance e Status Geral</h2>
+            
+            <div class="card p-3 mb-4 shadow-sm bg-white">
+                <form method="GET" action="{{ url_for('painel') }}" class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label for="filtroSemana" class="form-label small fw-bold text-muted">Filtrar Semana</label>
+                        <select class="form-select" id="filtroSemana" name="semana">
+                            <option value="" {% if not request.args.get('semana') %}selected{% endif %}>Semana Atual (Padrão)</option>
+                            <option value="semana_anterior" {% if request.args.get('semana') == 'semana_anterior' %}selected{% endif %}>Semana Anterior</option>
+                            <option value="ultimas_4" {% if request.args.get('semana') == 'ultimas_4' %}selected{% endif %}>Últimas 4 Semanas</option>
+                        </select>
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-funnel-fill"></i> Aplicar Filtro</button>
+                    </div>
+                    <div class="col-md-auto">
+                        <a href="{{ url_for('painel') }}" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Limpar</a>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="row mb-5">
+                
+                {# Card 1: Total de Disparos #}
+                <div class="col-md-3">
+                    <div class="card kpi-card border-0 text-dark bg-light">
+                        <div class="card-body">
+                            <h5 class="card-title">TOTAL DE DISPAROS (Filtro)</h5>
+                            <p class="card-text fs-3 text-primary">{{ total_disparos | default(0) }}</p>
+                            <span class="text-muted small"><i class="bi bi-send-fill"></i> Acumulado na Base</span>
+                        </div>
+                    </div>
+                </div>
+                
+                {# Card 2: Conectados #}
+                <div class="col-md-2">
+                    <div class="card kpi-card border-0 text-dark bg-light">
+                        <div class="card-body">
+                            <h5 class="card-title">Conectados</h5>
+                            <p class="card-text fs-3 status-conectado">{{ status_kpis.Conectado | default(0) }}</p>
+                            <span class="text-muted small"><i class="bi bi-check-circle-fill"></i> Vendedores Ativos</span>
+                        </div>
+                    </div>
+                </div>
+                
+                {# Card 3: Restritos #}
+                <div class="col-md-2">
+                    <div class="card kpi-card border-0 text-dark bg-light">
+                        <div class="card-body">
+                            <h5 class="card-title">Restritos</h5>
+                            <p class="card-text fs-3 status-restrito">{{ status_kpis.Restrito | default(0) }}</p>
+                            <span class="text-muted small"><i class="bi bi-pause-circle-fill"></i> Em Pausa/Ajuste</span>
+                        </div>
+                    </div>
+                </div>
+                
+                {# Card 4: Bases Pendentes #}
+                <div class="col-md-2">
+                    <div class="card kpi-card border-0 text-dark bg-light">
+                        <div class="card-body">
+                            <h5 class="card-title">Bases Pendentes</h5>
+                            <p class="card-text fs-3 text-warning">{{ bases_pendentes_count }}</p>
+                            <span class="text-muted small"><i class="bi bi-exclamation-triangle-fill"></i> Exige Tratamento</span>
+                        </div>
+                    </div>
+                </div>
+                
+                {# Card 5: Bloqueados #}
+                <div class="col-md-3">
+                    <div class="card kpi-card border-0 text-dark bg-light">
+                        <div class="card-body">
+                            <h5 class="card-title">BLOQUEADOS HOJE</h5>
+                            <p class="card-text fs-3 status-bloqueado">{{ status_kpis.Bloqueado | default(0) }}</p>
+                            <span class="text-muted small"><i class="bi bi-x-octagon-fill"></i> Exige Ação Urgente</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            
+            <h2 class="mt-4 text-secondary"><i class="bi bi-people-fill"></i> Detalhamento por Status</h2>
+            <div class="row mb-5">
+                {% for status, vendedores_lista in vendedores_por_status.items() %}
+                    {% set status_info = {
+                        'Conectado': {'class': 'success', 'icon': 'check-circle-fill'}, 
+                        'Restrito': {'class': 'info', 'icon': 'pause-circle-fill'},
+                        'Bloqueado': {'class': 'danger', 'icon': 'x-octagon-fill'}, 
+                        'Desconectado': {'class': 'secondary', 'icon': 'slash-circle-fill'}
+                    }[status] %}
+                    
+                    <div class="col-md-3">
+                        <div class="card h-100 border-0 shadow-sm">
+                            <div class="card-header bg-white border-0">
+                                <span class="fw-bold text-{{ status_info.class }}">
+                                    <i class="bi bi-{{ status_info.icon }} me-1"></i> {{ status }} ({{ vendedores_lista | length }})
+                                </span>
+                            </div>
+                            <ul class="list-group list-group-flush">
+                                {% for vendedor in vendedores_lista %}
+                                    <li class="list-group-item small text-truncate" title="{{ vendedor.loja_nome }}">{{ vendedor.nome }} <span class="text-muted">({{ vendedor.loja_nome }})</span></li>
+                                {% else %}
+                                    <li class="list-group-item text-muted small">Nenhum vendedor neste status.</li>
+                                {% endfor %}
+                            </ul>
+                            <div class="card-footer bg-white border-0">
+                                <a href="{{ url_for('vendedores', status=status) }}" class="btn btn-sm btn-outline-secondary w-100">Gerenciar</a>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+
+
+            <div class="row mb-5">
+                <div class="col-md-6">
+                    <div class="card h-100 border-danger shadow-sm">
+                        <div class="card-header bg-danger text-white fs-5"><i class="bi bi-lock-fill"></i> Alerta de Bloqueio</div>
+                        <div class="card-body">
+                            <h5 class="card-title text-danger">Vendedores Bloqueados Hoje: {{ bloqueados_hoje | length }}</h5>
+                            <ul class="list-group list-group-flush border-0">
+                                {% for vendedor in bloqueados_hoje %}
+                                    <li class="list-group-item border-0 p-1">{{ vendedor.nome }} ({{ vendedor.loja_nome }})</li>
+                                {% else %}
+                                    <li class="list-group-item border-0 p-1 text-success">Nenhum bloqueio registrado hoje.</li>
+                                {% endfor %}
+                            </ul>
+                            <hr>
+                            <p class="small text-muted mb-1">Pico de Bloqueios na Última Semana (Simulação):</p>
+                            <h4 class="fw-bold text-danger">{{ dia_mais_bloqueio }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100 border-info shadow-sm">
+                        <div class="card-header bg-info text-white fs-5"><i class="bi bi-calendar-event"></i> Próximos Eventos</div>
+                        <div class="card-body p-0">
+                            <ul class="list-group list-group-flush">
+                                {% for evento in eventos %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="fw-bold">{{ evento.nome }}</div>
+                                        <div class="small text-muted">{{ evento.loja.nome }}</div>
+                                    </div>
+                                    <span class="badge bg-primary rounded-pill">{{ evento.data_evento.strftime('%d/%m/%Y') }}</span>
+                                </li>
+                                {% else %}
+                                <li class="list-group-item text-muted">Nenhum evento futuro cadastrado.</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        {# --- CONTEÚDO DA ABA LOJAS --- #}
+        {% elif pagina == 'lojas' %}
+            
+            <div class="card p-3 mb-4 shadow-sm bg-white">
+                <form method="GET" action="{{ url_for('lojas') }}" class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label for="filtroResponsavel" class="form-label small fw-bold text-muted">Filtrar por Responsável</label>
+                        <input type="text" class="form-control" id="filtroResponsavel" name="responsavel" placeholder="Nome do Responsável" value="{{ request.args.get('responsavel', '') }}">
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-funnel-fill"></i> Aplicar Filtro</button>
+                    </div>
+                    <div class="col-md-auto">
+                        <a href="{{ url_for('lojas') }}" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Limpar</a>
+                    </div>
+                </form>
+            </div>
+
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr><th>ID</th><th>Nome da Loja</th><th>Responsável Admin</th><th>Total de Vendedores</th><th>Ações</th></tr>
+                </thead>
+                <tbody>
+                    {% for loja in lojas %}
+                    <tr>
+                        <td>{{ loja.id }}</td>
+                        <td>{{ loja.nome }}</td>
+                        <td>{{ loja.responsavel }}</td>
+                        <td><span class="badge bg-primary">{{ loja.vendedores | length }}</span></td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-warning" 
+                                data-bs-toggle="modal" 
+                                data-bs-target="#editarLojaModal"
+                                data-loja-id="{{ loja.id }}"
+                                data-loja-nome="{{ loja.nome }}"
+                                data-loja-responsavel="{{ loja.responsavel }}">
+                                <i class="bi bi-pencil"></i> Editar
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+        {# --- CONTEÚDO DA ABA VENDEDORES --- #}
+        {% elif pagina == 'vendedores' %}
+
+            <div class="card p-3 mb-4 shadow-sm bg-white">
+                <form method="GET" action="{{ url_for('vendedores') }}" class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label for="filtroLoja" class="form-label small fw-bold text-muted">Filtrar por Loja</label>
+                        <select class="form-select" id="filtroLoja" name="loja_id">
+                            <option value="">Todas as Lojas</option>
+                            {% for loja in lojas_raw %}
+                                <option value="{{ loja.id }}" 
+                                    {% if loja_id_filtro_ativo == loja.id %}selected{% endif %}>
+                                    {{ loja.nome }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="filtroStatus" class="form-label small fw-bold text-muted">Filtrar por Status</label>
+                        <select class="form-select" id="filtroStatus" name="status">
+                            <option value="">Todos os Status</option>
+                            {% for status in ['Conectado', 'Restrito', 'Bloqueado', 'Desconectado'] %}
+                                <option value="{{ status }}" {% if request.args.get('status') == status %}selected{% endif %}>
+                                    {{ status }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-funnel-fill"></i> Aplicar Filtros</button>
+                    </div>
+                    <div class="col-md-auto">
+                        <a href="{{ url_for('vendedores') }}" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Limpar</a>
+                    </div>
+                </form>
+            </div>
+            
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Loja</th>
+                        <th>Status</th>
+                        <th>Último Status</th> <th>Base Contatos</th> 
+                        <th class="text-center">Disparos (Hoje)</th>
+                        <th class="text-center">Disparos (Semana)</th> 
+                        <th class="text-center" style="width: 150px;">Ações Rápidas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for vendedor in vendedores %}
+                    <tr>
+                        <td>{{ vendedor.nome }}</td>
+                        <td>{{ vendedor.loja }}</td>
+                        <td><span class="status-{{ vendedor.status | lower }}">{{ vendedor.status }}</span></td>
+                        
+                        {# AQUI EXIBIMOS O STATUS ATUAL (ÚLTIMO REGISTRADO) E DATA DE ALTERAÇÃO (INCLUINDO DATA DE BLOQUEIO) #}
+                        <td>
+                            {% if vendedor.ultimo_status_tipo == 'Bloqueado' %}
+                                <span class="badge bg-danger">{{ vendedor.ultimo_status_tipo }}</span> desde {{ vendedor.ultimo_status_data }}
+                            {% else %}
+                                <span class="badge bg-secondary">{{ vendedor.ultimo_status_tipo }}</span> desde {{ vendedor.ultimo_status_data }}
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if vendedor.base_tratada %}
+                                <span class="badge bg-success"><i class="bi bi-check-circle"></i> Tratada</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark"><i class="bi bi-x-octagon"></i> Pendente</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="text-center">
+                            <span class="fw-bold me-2">{{ vendedor.disparos_dia }}</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary p-1" 
+                                data-bs-toggle="modal" 
+                                data-bs-target="#editarDisparosModal"
+                                data-vendedor-id="{{ vendedor.id }}"
+                                data-disparos-hoje="{{ vendedor.disparos_dia }}"
+                                data-vendedor-nome="{{ vendedor.nome }}"
+                                title="Editar Disparos Diários">
+                                <i class="bi bi-pencil-square"></i>
+                            </button>
+                        </td>
+                        
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-outline-info" 
+                                data-bs-toggle="modal" 
+                                data-bs-target="#editarDisparosSemanaisModal"
+                                data-vendedor-id="{{ vendedor.id }}"
+                                data-vendedor-nome="{{ vendedor.nome }}"
+                                title="Ver/Editar Disparos Semanais"
+                                {% for dia, total in vendedor.disparos_semanais.items() %}
+                                    data-disparo-{{ dia | lower }}="{{ total }}"
+                                {% endfor %}>
+                                <i class="bi bi-calendar-week"></i> Info
+                            </button>
+                        </td>
+
+                        <td class="text-center">
+                            {% set current_status = vendedor.status %}
+                            {% set current_vendedor_id = vendedor.id %}
+                            
+                            <form method="POST" action="{{ url_for('alternar_base_tratada', vendedor_id=current_vendedor_id, **request.args) }}" style="display:inline; margin-right: 5px;">
+                                <button type="submit" class="btn btn-sm {% if vendedor.base_tratada %}btn-success{% else %}btn-warning text-dark{% endif %}" title="Alternar Status da Base de Contatos">
+                                    <i class="bi bi-card-checklist"></i> Base
+                                </button>
+                            </form>
+
+                            {# Menu Dropdown para Ações de Status #}
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm btn-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" title="Mudar Status do Vendedor">
+                                    <i class="bi bi-three-dots"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li class="dropdown-header">Mudar Status para:</li>
+
+                                    {% if current_status != 'Conectado' %}
+                                        <li>
+                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=current_vendedor_id, novo_status='Conectado', **request.args) }}">
+                                                <button type="submit" class="dropdown-item text-success"><i class="bi bi-plug-fill me-2"></i> Conectado</button>
+                                            </form>
+                                        </li>
+                                    {% endif %}
+                                    
+                                    {% if current_status != 'Restrito' %}
+                                        <li>
+                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=current_vendedor_id, novo_status='Restrito', **request.args) }}">
+                                                <button type="submit" class="dropdown-item text-info"><i class="bi bi-pause-circle-fill me-2"></i> Restrito</button>
+                                            </form>
+                                        </li>
+                                    {% endif %}
+                                    
+                                    {% if current_status != 'Bloqueado' %}
+                                        <li>
+                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=current_vendedor_id, novo_status='Bloqueado', **request.args) }}">
+                                                <button type="submit" class="dropdown-item text-danger"><i class="bi bi-lock-fill me-2"></i> Bloqueado</button>
+                                            </form>
+                                        </li>
+                                    {% endif %}
+                                    
+                                    {% if current_status != 'Desconectado' %}
+                                        <li>
+                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=current_vendedor_id, novo_status='Desconectado', **request.args) }}">
+                                                <button type="submit" class="dropdown-item text-secondary"><i class="bi bi-slash-circle me-2"></i> Desconectado</button>
+                                            </form>
+                                        </li>
+                                    {% endif %}
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+        {% endif %}
+
+    </div>
+    
+    {# MODAIS (Compartilhados por todas as abas) #}
+
+    {# Modal Adicionar Loja (Loja + Gestor) #}
+    <div class="modal fade" id="adicionarLojaModal" tabindex="-1" aria-labelledby="adicionarLojaModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ url_for('lojas') }}">
+                    {{ loja_form.hidden_tag() }}
+                    <div class="modal-header"><h5 class="modal-title" id="adicionarLojaModalLabel">Adicionar Nova Loja e Gestor</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                    <div class="modal-body">
+                        <h6>Dados da Loja</h6>
+                        <div class="mb-3">
+                            {{ loja_form.nome_loja.label(class="form-label") }}{{ loja_form.nome_loja(class="form-control") }}
+                            {% for error in loja_form.nome_loja.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
+                        <div class="mb-3">
+                            {{ loja_form.responsavel.label(class="form-label") }}{{ loja_form.responsavel(class="form-control") }}
+                            {% for error in loja_form.responsavel.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
+                        
+                        <hr>
+                        <h6>Dados do Gestor</h6>
+                        
+                        <div class="mb-3">
+                            {{ loja_form.nome_vendedor.label(class="form-label") }}{{ loja_form.nome_vendedor(class="form-control") }}
+                            {% for error in loja_form.nome_vendedor.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
+                        <div class="mb-3">
+                            {{ loja_form.email_vendedor.label(class="form-label") }}{{ loja_form.email_vendedor(class="form-control") }}
+                            {% for error in loja_form.email_vendedor.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
+                        <p class="text-info small"><i class="bi bi-info-circle-fill"></i> **Para adicionar mais vendedores**, utilize o botão "Adicionar Vendedor" na aba **Vendedores** após a criação da loja.</p>
+                    </div>
+                    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>{{ loja_form.submit(class="btn btn-primary") }}</div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    {# Modal Adicionar Vendedor #}
+    <div class="modal fade" id="adicionarVendedorModal" tabindex="-1" aria-labelledby="adicionarVendedorModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ url_for('vendedores') }}">
+                    {{ vendedor_form.hidden_tag() }}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="adicionarVendedorModalLabel">Adicionar Novo Vendedor</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            {{ vendedor_form.nome.label(class="form-label") }}
+                            {{ vendedor_form.nome(class="form-control") }}
+                            {% for error in vendedor_form.nome.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
+                        <div class="mb-3">
+                            {{ vendedor_form.email.label(class="form-label") }}
+                            {{ vendedor_form.email(class="form-control") }}
+                            {% for error in vendedor_form.email.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
+                        <div class="mb-3">
+                            {{ vendedor_form.loja_id.label(class="form-label") }}
+                            {{ vendedor_form.loja_id(class="form-select") }}
+                            {% for error in vendedor_form.loja_id.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
+                        <div class="mb-3">
+                            {{ vendedor_form.status.label(class="form-label") }}
+                            {{ vendedor_form.status(class="form-select") }}
+                            {% for error in vendedor_form.status.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
+                        <p class="text-muted small">A base de contatos deste vendedor será marcada como **Pendente**.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                        {{ vendedor_form.submit(class="btn btn-primary") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# Modal Editar Loja #}
+    <div class="modal fade" id="editarLojaModal" tabindex="-1" aria-labelledby="editarLojaModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ url_for('editar_loja') }}">
+                    {{ loja_edit_form.hidden_tag() }}
+                    <input type="hidden" name="loja_id" id="modal-loja-id-editar"> 
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="editarLojaModalLabel">Editar Loja: <span id="modal-loja-nome-title"></span></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            {{ loja_edit_form.nome.label(class="form-label") }}
+                            {{ loja_edit_form.nome(class="form-control", id="modal-nome-loja") }}
+                            {% for error in loja_edit_form.nome.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
+                        <div class="mb-3">
+                            {{ loja_edit_form.responsavel.label(class="form-label") }}
+                            {{ loja_edit_form.responsavel(class="form-control", id="modal-responsavel-loja") }}
+                            {% for error in loja_edit_form.responsavel.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                        {{ loja_edit_form.submit(class="btn btn-warning") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# Modal Editar Disparos Diários #}
+    <div class="modal fade" id="editarDisparosModal" tabindex="-1" aria-labelledby="editarDisparosModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ url_for('editar_disparos_dia') }}">
+                    <input type="hidden" name="vendedor_id" id="modal-vendedor-id-dia">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="editarDisparosModalLabel">Editar Disparos Diários para: <span id="modal-vendedor-nome-dia"></span></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="disparos-hoje-input" class="form-label">Total de Disparos Hoje ({{ today_date.strftime('%d/%m/%Y') }}):</label>
+                            
+                            <input type="number" class="form-control" id="disparos-hoje-input" name="disparos_hoje" required min="0">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                        <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# Modal Editar Disparos Semanais #}
+    <div class="modal fade" id="editarDisparosSemanaisModal" tabindex="-1" aria-labelledby="editarDisparosSemanaisModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ url_for('editar_disparos_semana') }}">
+                    <input type="hidden" name="vendedor_id" id="modal-vendedor-id-semana">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="editarDisparosSemanaisModalLabel">Disparos Semanais de: <span id="modal-vendedor-nome-semana"></span></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="small text-muted">Ajuste ou visualize os totais de disparos por dia da semana.</p>
+                        <div class="row g-2">
+                            {% set dias = ['Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado', 'Domingo'] %}
+                            {% for dia in dias %}
+                                <div class="col-md-6">
+                                    <label for="disparo-{{ dia | lower }}" class="form-label small">{{ dia }}:</label>
+                                    <input type="number" class="form-control form-control-sm" id="disparo-{{ dia | lower }}" name="disparo_{{ dia | lower }}" required min="0" value="0">
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                        <button type="submit" class="btn btn-primary">Salvar Semana</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# NOVO MODAL: Gerar Relatório PDF #}
+    <div class="modal fade" id="gerarRelatorioModal" tabindex="-1" aria-labelledby="gerarRelatorioModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ url_for('gerar_relatorio_pdf') }}">
+                    {{ relatorio_form.hidden_tag() }}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="gerarRelatorioModalLabel"><i class="bi bi-file-pdf"></i> Gerar Relatório de Loja</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            {{ relatorio_form.loja_id_relatorio.label(class="form-label") }}
+                            {{ relatorio_form.loja_id_relatorio(class="form-select") }}
+                            {% for error in relatorio_form.loja_id_relatorio.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
+                        
+                        <hr>
+                        <p class="fw-bold">Dados Manuais (Ligações)</p>
+                        <div class="mb-3">
+                            {{ relatorio_form.ligacoes_realizadas.label(class="form-label") }}
+                            <textarea class="form-control" name="ligacoes_realizadas" id="ligacoes_realizadas" rows="4" placeholder="Ex: Foram realizadas 50 ligações de follow-up. 10 resultaram em agendamento, 40 em rejeição. Necessário novo script."></textarea>
+                            {% for error in relatorio_form.ligacoes_realizadas.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
+                        <p class="text-muted small"><i class="bi bi-info-circle"></i> O relatório incluirá o **Total de Convites Enviados (Disparos)** de todos os vendedores da loja.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                        {{ relatorio_form.submit(class="btn btn-info text-white") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    
+    {# SCRIPTS JS para Modais #}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Script para o Modal de Edição de Loja
+            const editarLojaModal = document.getElementById('editarLojaModal');
+            if (editarLojaModal) {
+                editarLojaModal.addEventListener('show.bs.modal', function (event) {
+                    const button = event.relatedTarget;
+                    const lojaId = button.getAttribute('data-loja-id');
+                    const lojaNome = button.getAttribute('data-loja-nome');
+                    const lojaResponsavel = button.getAttribute('data-loja-responsavel');
+                    
+                    const modalTitle = editarLojaModal.querySelector('#modal-loja-nome-title');
+                    
+                    const modalIdInput = editarLojaModal.querySelector('input[name="loja_id"]'); 
+                    
+                    const modalNomeInput = editarLojaModal.querySelector('input[name="nome"]'); 
+                    const modalResponsavelInput = editarLojaModal.querySelector('input[name="responsavel"]');
+
+                    modalTitle.textContent = lojaNome;
+                    modalIdInput.value = lojaId;
+                    
+                    if (modalNomeInput) {
+                        modalNomeInput.value = lojaNome;
+                    }
+                    if (modalResponsavelInput) {
+                        modalResponsavelInput.value = lojaResponsavel;
+                    }
+                });
+            }
+
+            // Script para o Modal de Edição de Disparos Diários
+            const editarDisparosModal = document.getElementById('editarDisparosModal');
+            if (editarDisparosModal) {
+                editarDisparosModal.addEventListener('show.bs.modal', function (event) {
+                    const button = event.relatedTarget;
+                    const vendedorId = button.getAttribute('data-vendedor-id');
+                    const vendedorNome = button.getAttribute('data-vendedor-nome');
+                    const disparosHoje = button.getAttribute('data-disparos-hoje');
+                    
+                    const modalIdInput = editarDisparosModal.querySelector('#modal-vendedor-id-dia');
+                    const modalNomeSpan = editarDisparosModal.querySelector('#modal-vendedor-nome-dia');
+                    const modalDisparosInput = editarDisparosModal.querySelector('#disparos-hoje-input');
+                    
+                    modalIdInput.value = vendedorId;
+                    modalNomeSpan.textContent = vendedorNome;
+                    modalDisparosInput.value = disparosHoje;
+                });
+            }
+
+            // Script para o Modal de Edição de Disparos Semanais
+            const editarDisparosSemanaisModal = document.getElementById('editarDisparosSemanaisModal');
+            if (editarDisparosSemanaisModal) {
+                editarDisparosSemanaisModal.addEventListener('show.bs.modal', function (event) {
+                    const button = event.relatedTarget;
+                    const vendedorId = button.getAttribute('data-vendedor-id');
+                    const vendedorNome = button.getAttribute('data-vendedor-nome');
+                    
+                    const modalIdInput = editarDisparosSemanaisModal.querySelector('#modal-vendedor-id-semana');
+                    const modalNomeSpan = editarDisparosSemanaisModal.querySelector('#modal-vendedor-nome-semana');
+
+                    modalIdInput.value = vendedorId;
+                    modalNomeSpan.textContent = vendedorNome;
+
+                    // Preenche os campos de input com os dados da semana
+                    const dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
+                    dias.forEach(dia => {
+                        const input = editarDisparosSemanaisModal.querySelector(`#disparo-${dia}`);
+                        // Usa o atributo data-disparo-dia para preencher
+                        const valor = button.getAttribute(`data-disparo-${dia}`) || '0'; 
+                        if (input) {
+                            input.value = valor;
+                        }
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+</html>
