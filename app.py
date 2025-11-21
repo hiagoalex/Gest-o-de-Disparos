@@ -17,7 +17,6 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import cm
-from reportlab.pdfgen import canvas as rl_canvas
 
 # local database helper
 import database
@@ -77,13 +76,12 @@ class RelatorioForm(FlaskForm):
     submit = SubmitField('Gerar PDF')
     def __init__(self, *args, **kwargs):
         super(RelatorioForm, self).__init__(*args, **kwargs)
-        lojas = database.listar_lojas()
+        lojas = database.listar_lojas() or []
         self.loja_id_relatorio.choices = [(l['id'], l['nome']) for l in lojas]
 
 # Main data processors (use DB)
 def processar_dados_painel():
     vendedores = database.listar_vendedores()
-    # for each vendedor ensure disparos_semanais shape
     for v in vendedores:
         ds = database.get_disparos_semanais(v['id'])
         if ds:
@@ -174,9 +172,8 @@ def myPageTemplate(canvas, doc):
     canvas.drawString(doc.leftMargin + 20, 15, address_text)
     canvas.restoreState()
 
-# PDF generation (keeps your layout) and **saves file to static/pdfs/<loja>/<vendedor>/<date>.pdf**
+# PDF generation
 def gerar_pdf_reportlab(loja_data, vendedores_data, ligacoes_realizadas):
-    # build PDF in memory to stream and also save on disk
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=72)
     doc.topMargin = 70; doc.bottomMargin = 40
@@ -231,11 +228,9 @@ def gerar_pdf_reportlab(loja_data, vendedores_data, ligacoes_realizadas):
     else:
         Story.append(Paragraph("Nenhum vendedor encontrado para esta loja.", styles['CustomNormalSmall']))
 
-    # build PDF into buffer
     doc.build(Story, onFirstPage=myPageTemplate, onLaterPages=myPageTemplate)
     buffer.seek(0)
 
-    # Save a copy on disk: static/pdfs/<loja>/<date>.pdf
     folder_base = os.path.join('static', 'pdfs', sanitize_filename(loja_data.get('nome','loja')))
     os.makedirs(folder_base, exist_ok=True)
     filename_base = f"Relatorio_{sanitize_filename(loja_data.get('nome','loja'))}_{date.today().strftime('%Y%m%d')}.pdf"
@@ -243,19 +238,17 @@ def gerar_pdf_reportlab(loja_data, vendedores_data, ligacoes_realizadas):
     with open(disk_path, 'wb') as f:
         f.write(buffer.getbuffer())
 
-    # Return BytesIO for send_file and path for storage reference
     buffer.seek(0)
     return buffer, disk_path
 
 def sanitize_filename(s: str):
-    # simples sanitização: remove caracteres problemáticos
     if not s:
         return "file"
     allowed = "-_.() abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
     cleaned = "".join(c for c in s if c in allowed)
     return cleaned.replace(" ", "_")
 
-# Routes (kept names)
+# Routes
 @app.route('/')
 def index():
     return redirect(url_for('painel'))
@@ -264,15 +257,12 @@ def index():
 def painel():
     dados_painel = processar_dados_painel()
     vendedor_form = VendedorForm()
-    # fill loja choices dynamically
     lojas = database.listar_lojas()
     vendedor_form.loja_id.choices = [(l['id'], l['nome']) for l in lojas]
     loja_form = LojaForm()
     loja_edit_form = LojaEditForm()
     relatorio_form = RelatorioForm()
-    # pass vendedores raw for compatibility (used by templates)
     vendedores = database.listar_vendedores()
-    # add disparos_semanais to vendedores for templates if needed
     for v in vendedores:
         ds = database.get_disparos_semanais(v['id'])
         if ds:
@@ -287,8 +277,7 @@ def painel():
             }
         else:
             v['disparos_semanais'] = gerar_disparos_semanais_simulados()
-
-    eventos_raw = []  # você pode popular eventos via database se quiser (não alterei templates)
+    eventos_raw = []
     return render_template('dashboard.html',
                            pagina='painel',
                            today_date=date.today(),
@@ -303,25 +292,32 @@ def painel():
 @app.route('/gerar_relatorio_pdf', methods=['POST'])
 def gerar_relatorio_pdf():
     form = RelatorioForm(request.form)
-    # reload choices
-    lojas = database.listar_lojas()
+    try:
+        lojas = database.listar_lojas() or []
+    except Exception as e:
+        print("Erro ao listar lojas:", e)
+        lojas = []
+
     form.loja_id_relatorio.choices = [(l['id'], l['nome']) for l in lojas]
+
+    if not lojas:
+        flash("Nenhuma loja cadastrada para gerar relatório.", 'warning')
+        return redirect(url_for('painel'))
 
     if form.validate_on_submit():
         loja_id = form.loja_id_relatorio.data
         ligacoes_realizadas = form.ligacoes_realizadas.data
         loja_data = database.get_loja_by_id(loja_id)
-        vendedores_loja = get_vendedores_by_loja_id(loja_id)
         if not loja_data:
             flash(f"Erro: Loja com ID {loja_id} não encontrada.", 'danger')
             return redirect(url_for('painel'))
+        vendedores_loja = get_vendedores_by_loja_id(loja_id)
         try:
             pdf_buffer, disk_path = gerar_pdf_reportlab(loja_data, vendedores_loja, ligacoes_realizadas)
             filename = os.path.basename(disk_path)
-            # send file as attachment
             return send_file(pdf_buffer, as_attachment=True, download_name=filename, mimetype='application/pdf')
         except Exception as e:
-            print(f"Erro detalhado na geração do PDF (ReportLab): {e}", file=sys.stderr)
+            print(f"Erro detalhado na geração do PDF (ReportLab): {e}")
             flash(f"Erro ao gerar PDF: {e}", 'danger')
             return redirect(url_for('painel'))
     else:
@@ -411,7 +407,6 @@ def lojas():
     relatorio_form = RelatorioForm()
     if loja_form.validate_on_submit():
         nova_loja = database.insert_loja(loja_form.nome_loja.data, loja_form.responsavel.data)
-        # cria vendedor gestor também
         novo_vendedor = {
             'nome': loja_form.nome_vendedor.data,
             'email': loja_form.email_vendedor.data,
