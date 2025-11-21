@@ -26,7 +26,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'uma_chave_secreta_muito_forte_e_dificil')
 
 # locale
-=======
+
 
 # --- IMPORTAÇÕES PURAS PYTHON PARA PDF (ReportLab) ---
 from reportlab.lib.pagesizes import A4
@@ -42,7 +42,7 @@ from reportlab.lib.utils import ImageReader # Para imagens se necessário (mas n
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'uma_chave_secreta_muito_forte_e_dificil' 
 
->>>>>>> dd5305246988e1695c03bf0a536448f0e6b7ec9d
+
 try:
     locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 except locale.Error:
@@ -53,9 +53,9 @@ except locale.Error:
 
 
 # ReportLab styles
-=======
+
 # --- DEFINIÇÃO GLOBAL DOS ESTILOS DO REPORTLAB ---
->>>>>>> dd5305246988e1695c03bf0a536448f0e6b7ec9d
+
 PDF_STYLES = getSampleStyleSheet()
 PDF_STYLES.add(ParagraphStyle(name='CustomTitle', fontSize=18, alignment=1, spaceAfter=20, fontName='Helvetica-Bold', textColor=colors.navy))
 PDF_STYLES.add(ParagraphStyle(name='CustomHeading2', fontSize=14, alignment=0, spaceBefore=15, spaceAfter=8, fontName='Helvetica-Bold', textColor=colors.darkblue))
@@ -64,7 +64,7 @@ PDF_STYLES.add(ParagraphStyle(name='CustomSummary', fontSize=16, alignment=0, sp
 
 
 # helpers: generate random weekly if none
-=======
+
 PDF_STYLES.add(ParagraphStyle(name='HeaderLogoText', fontSize=16, alignment=2, fontName='Helvetica-Bold', textColor=colors.yellow)) # Estilo para o texto do logo
 PDF_STYLES.add(ParagraphStyle(name='FooterAddress', fontSize=9, alignment=0, fontName='Helvetica-Bold', textColor=colors.black)) # Estilo para o texto do rodapé
 
@@ -76,14 +76,14 @@ db_lojas = [
     {'id': 3, 'nome': 'Loja Digital', 'responsavel': 'Beatriz Oliveira'}
 ]
 
->>>>>>> dd5305246988e1695c03bf0a536448f0e6b7ec9d
+
 def gerar_disparos_semanais_simulados():
     dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
     return {dia: random.randint(10, 80) for dia in dias}
 
 
 # Forms
-=======
+
 db_vendedores = [
     {'id': 101, 'nome': 'Ricardo Gestor', 'loja_id': 1, 'loja': 'Mega Loja Centro', 'email': 'ricardo@megacentro.com', 'status': 'Conectado', 'base_tratada': True, 'disparos_dia': 120, 'disparos_semanais': gerar_disparos_semanais_simulados(), 'ultimo_status_tipo': 'Conectado', 'ultimo_status_data': '15/11/2025'},
     {'id': 102, 'nome': 'Mariana Vendas', 'loja_id': 1, 'loja': 'Mega Loja Centro', 'email': 'mariana@megacentro.com', 'status': 'Restrito', 'base_tratada': False, 'disparos_dia': 50, 'disparos_semanais': gerar_disparos_semanais_simulados(), 'ultimo_status_tipo': 'Restrito', 'ultimo_status_data': '14/11/2025'},
@@ -160,7 +160,7 @@ def processar_dados_painel():
             v['disparos_semanais'] = gerar_disparos_semanais_simulados()
     total_disparos = sum(sum(v['disparos_semanais'].values()) for v in vendedores)
 
-=======
+
     # Definido dentro do init para carregar as opções dinamicamente
     loja_id_relatorio = SelectField('Selecione a Loja', coerce=int, validators=[DataRequired()])
     ligacoes_realizadas = TextAreaField(' SCRIPT DISPAROS DE LIGAÇÕES', validators=[Optional(), Length(max=500)], render_kw={"rows": 5})
