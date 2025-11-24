@@ -643,7 +643,8 @@
     <div class="modal fade" id="gerarRelatorioModal" tabindex="-1" aria-labelledby="gerarRelatorioModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
-                <form method="POST" action="{{ url_for('gerar_pdf_xhtml2pdf') }}">
+                <form method="POST" action="{{ url_for('gerar_relatorio_pdf') }}">
+
                     {{ relatorio_form.hidden_tag() }}
                     <div class="modal-header">
                         <h5 class="modal-title" id="gerarRelatorioModalLabel"><i class="bi bi-file-pdf"></i> Gerar Relatório de Loja</h5>
