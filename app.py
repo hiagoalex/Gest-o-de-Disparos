@@ -378,16 +378,18 @@ def editar_loja():
         flash('Erro de validação ao editar a loja.', 'warning')
     return redirect(url_for('lojas'))
 
-@app.route('/vendedor/<int:vendedor_id>/status/<novo_status>', methods=['POST'])
-def mudar_status_vendedor(vendedor_id, novo_status):
+@app.route("/alterar_status/<int:id_vendedor>/<novo_status>")
+def alterar_status(id_vendedor, novo_status):
     try:
-        update_status_vendedor(vendedor_id, novo_status)
-        flash("Status alterado com sucesso!", "success")
+        ok = update_status_vendedor(id_vendedor, novo_status, supabase)
+        if ok:
+            flash("Status alterado com sucesso!", "success")
+        else:
+            flash("Erro ao alterar status", "danger")
     except Exception as e:
         flash(f"Erro ao alterar status: {e}", "danger")
 
-    return redirect(url_for('vendedores', **request.args))
-
+    return redirect(url_for("home"))
 
 # ---------------------- ROTAS DE PDF ----------------------
 @app.route('/gerar_relatorio_pdf', methods=['POST'])
