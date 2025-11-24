@@ -643,7 +643,9 @@
     <div class="modal fade" id="gerarRelatorioModal" tabindex="-1" aria-labelledby="gerarRelatorioModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
-                <form method="POST" action="{{ url_for('gerar_relatorio_pdf') }}">
+                <a href="{{ url_for('gerar_relatorio_pdf') }}" class="btn btn-primary">
+                            Gerar Relatório
+                </a>
 
                     {{ relatorio_form.hidden_tag() }}
                     <div class="modal-header">

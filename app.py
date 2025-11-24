@@ -12,7 +12,9 @@ import sys
 import os
 from flask import render_template, send_file, flash
 from xhtml2pdf import pisa
-
+from flask import Flask, render_template, send_file
+from io import BytesIO
+from datetime import date
 
 # reportlab
 from reportlab.lib.pagesizes import A4
@@ -385,32 +387,35 @@ def editar_loja():
     return redirect(url_for('lojas'))
 
 # ---------------------- ROTAS DE PDF ----------------------
-@app.route('/gerar_relatorio_pdf', methods=['POST'])
+@app.route('/gerar_relatorio_pdf')
 def gerar_relatorio_pdf():
-    form = RelatorioForm(request.form)
-    lojas = database.listar_lojas()
-    form.loja_id_relatorio.choices = [(l['id'], l['nome']) for l in lojas]
+    # Dados do relatório
+    loja = {'nome': 'Loja Teste', 'responsavel': 'João'}
+    data_hoje = date.today().strftime('%d/%m/%Y')
+    total_convites_enviados = 120
+    ligacoes_realizadas = "Exemplo de relato manual."
+    vendedores_loja = [
+        {'nome': 'Vendedor 1', 'disparos_semanais': {1:10, 2:12}, 'disparos_dia': 5, 'status':'Connected', 'base_tratada': True},
+        {'nome': 'Vendedor 2', 'disparos_semanais': {1:8, 2:9}, 'disparos_dia': 4, 'status':'Blocked', 'base_tratada': False},
+    ]
 
-    if form.validate_on_submit():
-        loja_id = form.loja_id_relatorio.data
-        ligacoes_realizadas = form.ligacoes_realizadas.data
-        loja_data = database.get_loja_by_id(loja_id)
-        vendedores_loja = get_vendedores_by_loja_id(loja_id)
+    # Renderiza HTML do template
+    html = render_template('relatorio_template_html.html',
+                           loja=loja,
+                           data_hoje=data_hoje,
+                           total_convites_enviados=total_convites_enviados,
+                           ligacoes_realizadas=ligacoes_realizadas,
+                           vendedores_loja=vendedores_loja)
 
-        if not loja_data:
-            flash(f"Erro: Loja com ID {loja_id} não encontrada.", 'danger')
-            return redirect(url_for('painel'))
+    # PDF em memória
+    pdf = BytesIO()
+    pisa_status = pisa.CreatePDF(html, dest=pdf)
 
-        try:
-            pdf_buffer, disk_path = gerar_pdf_xhtml2pdf(loja_data, vendedores_loja, ligacoes_realizadas)
-            filename = os.path.basename(disk_path)
-            return send_file(pdf_buffer, as_attachment=True, download_name=filename)
-        except Exception as e:
-            flash(f"Erro ao gerar PDF: {str(e)}", 'danger')
-            return redirect(url_for('painel'))
+    if pisa_status.err:
+        return "Erro ao gerar PDF", 500
 
-    flash("Formulário inválido!", "warning")
-    return redirect(url_for('painel'))
+    pdf.seek(0)
+    return send_file(pdf, as_attachment=True, download_name="relatorio.pdf", mimetype='application/pdf')
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
