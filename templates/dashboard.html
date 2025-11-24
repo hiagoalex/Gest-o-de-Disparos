@@ -428,7 +428,7 @@
 
                                     {% if current_status != 'Conectado' %}
                                         <li>
-                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=current_vendedor_id, novo_status='Conectado', **request.args) }}">
+                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Restrito') }}">
                                                 <button type="submit" class="dropdown-item text-success"><i class="bi bi-plug-fill me-2"></i> Conectado</button>
                                             </form>
                                         </li>
@@ -436,7 +436,7 @@
                                     
                                     {% if current_status != 'Restrito' %}
                                         <li>
-                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=current_vendedor_id, novo_status='Restrito', **request.args) }}">
+                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Restrito') }}">
                                                 <button type="submit" class="btn btn-warning">Restringir</button>
                                             </form>
                                         </li>
@@ -444,7 +444,7 @@
                                     
                                     {% if current_status != 'Bloqueado' %}
                                         <li>
-                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=current_vendedor_id, novo_status='Bloqueado', **request.args) }}">
+                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Restrito') }}">
                                                 <button type="submit" class="dropdown-item text-danger"><i class="bi bi-lock-fill me-2"></i> Bloqueado</button>
                                             </form>
                                         </li>
@@ -452,7 +452,7 @@
                                     
                                     {% if current_status != 'Desconectado' %}
                                         <li>
-                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=current_vendedor_id, novo_status='Desconectado', **request.args) }}">
+                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Restrito') }}">
                                                 <button type="submit" class="dropdown-item text-secondary"><i class="bi bi-slash-circle me-2"></i> Desconectado</button>
                                             </form>
                                         </li>
