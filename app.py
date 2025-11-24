@@ -386,27 +386,54 @@ def editar_loja():
 
 # ---------------------- ROTAS DE PDF ----------------------
 @app.route('/gerar_relatorio_pdf', methods=['POST'])
-def gerar_relatorio_pdf():
-    form = RelatorioForm(request.form)
-    lojas = database.listar_lojas()
-    form.loja_id_relatorio.choices = [(l['id'], l['nome']) for l in lojas]
-    if form.validate_on_submit():
-        loja_id = form.loja_id_relatorio.data
-        ligacoes_realizadas = form.ligacoes_realizadas.data
-        loja_data = database.get_loja_by_id(loja_id)
-        vendedores_loja = get_vendedores_by_loja_id(loja_id)
-        if not loja_data:
-            flash(f"Erro: Loja com ID {loja_id} não encontrada.", 'danger')
-            return redirect(url_for('painel'))
-        try:
-            pdf_buffer, disk_path = gerar_pdf_reportlab(loja_data, vendedores_loja, ligacoes_realizadas)
-            filename = os.path.basename(disk_path)
-            return send_file(pdf_buffer, as_attachment=True, download_name=filename)
-        except Exception as e:
-            flash(f"Erro ao gerar PDF: {str(e)}", 'danger')
-            return redirect(url_for('painel'))
-    flash("Formulário inválido!", "warning")
-    return redirect(url_for('painel'))
+def gerar_pdf_xhtml2pdf(loja_data, vendedores_loja, ligacoes_realizadas):
+    # Garantir que dados existam
+    loja_data = loja_data or {'nome':'N/A','responsavel':'N/A'}
+    vendedores_loja = vendedores_loja or []
+
+    for v in vendedores_loja:
+        if 'disparos_semanais' not in v or not v['disparos_semanais']:
+            v['disparos_semanais'] = {d:0 for d in ['segunda','terca','quarta','quinta','sexta','sabado','domingo']}
+        status_classes = {
+            'Conectado': 'status-connected',
+            'Bloqueado': 'status-blocked',
+            'Restrito': 'status-restricted',
+            'Desconectado': 'status-disconnected'
+        }
+        v['status_class'] = status_classes.get(v.get('status','Desconectado'), 'status-disconnected')
+
+    total_convites = sum(sum(v['disparos_semanais'].values()) for v in vendedores_loja)
+    
+    # Renderiza HTML
+    html = render_template(
+        'relatorio_template_html.html',
+        loja=loja_data,
+        vendedores_loja=vendedores_loja,
+        data_hoje=date.today().strftime('%d/%m/%Y'),
+        total_convites_enviados=total_convites,
+        ligacoes_realizadas=ligacoes_realizadas
+    )
+
+    # Gerar PDF
+    pdf = io.BytesIO()
+    pisa_status = pisa.CreatePDF(io.StringIO(html), dest=pdf)
+    
+    if pisa_status.err:
+        raise Exception("Erro ao gerar PDF")
+
+    pdf.seek(0)
+
+    # Criar pasta para salvar PDF
+    folder_base = os.path.join('static', 'pdfs', loja_data.get('nome','loja'))
+    os.makedirs(folder_base, exist_ok=True)
+    filename = f"Relatorio_{loja_data.get('nome','loja')}_{date.today().strftime('%Y%m%d')}.pdf"
+    disk_path = os.path.join(folder_base, filename)
+    
+    with open(disk_path, 'wb') as f:
+        f.write(pdf.getbuffer())
+
+    pdf.seek(0)
+    return pdf, disk_path
 
 if __name__ == '__main__':
     app.run(debug=True)
