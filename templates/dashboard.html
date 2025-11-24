@@ -410,11 +410,10 @@
                             {% set current_status = vendedor.status %}
                             {% set current_vendedor_id = vendedor.id %}
                             
-                            <form method="POST" action="{{ url_for('alternar_base_tratada', vendedor_id=current_vendedor_id, **request.args) }}" style="display:inline; margin-right: 5px;">
-                                <button type="submit" class="btn btn-sm {% if vendedor.base_tratada %}btn-success{% else %}btn-warning text-dark{% endif %}" title="Alternar Status da Base de Contatos">
-                                    <i class="bi bi-card-checklist"></i> Base
-                                </button>
+                            <form method="POST" action="{{ url_for('alternar_base_tratada', vendedor_id=vendedor.id) }}" style="display:inline; margin-right: 5px;">
+                                <button type="submit" class="btn btn-sm btn-warning">Alternar Base</button>
                             </form>
+
 
                             {# Menu Dropdown para Ações de Status #}
                             <div class="btn-group">

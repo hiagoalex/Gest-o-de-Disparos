@@ -365,6 +365,13 @@ def editar_loja():
         flash('Erro de validação ao editar a loja.', 'warning')
     return redirect(url_for('lojas'))
 
+@app.route('/vendedores/<int:vendedor_id>/alternar_base', methods=['POST'])
+def alternar_base_tratada(vendedor_id):
+    from database import toggle_base_tratada
+    toggle_base_tratada(vendedor_id)
+    flash("Status de base tratada alterado!", "success")
+    return redirect(request.referrer or url_for('vendedores'))
+
 # ---------------------- ROTAS DE PDF ----------------------
 @app.route('/gerar_relatorio_pdf', methods=['POST'])
 def gerar_relatorio_pdf():
