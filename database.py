@@ -172,18 +172,26 @@ def update_status_vendedor(vendedor_id, novo_status):
     conn.close()
 
 def alternar_base_tratada(vendedor_id):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE vendedores
-        SET base_tratada = NOT base_tratada
-        WHERE id=%s;
-    """, (vendedor_id,))
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        conn = psycopg2.connect(current_app.config['DATABASE_URL'], sslmode='require')
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Busca o vendedor
+        cursor.execute("SELECT * FROM vendedores WHERE id = %s", (vendedor_id,))
+        row = cursor.fetchone()  # <-- row existe aqui
+        
+        if row:  # Certifica que encontrou o vendedor
+            novo_valor = not row['base_tratada']  # exemplo de booleano
+            cursor.execute("UPDATE vendedores SET base_tratada = %s WHERE id = %s", (novo_valor, vendedor_id))
+            conn.commit()
+        
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"Erro ao alterar base tratada: {e}")
+    
+    return redirect(url_for('vendedores'))
 
-    return dict(row)
 
 def update_disparos_semanais(vendedor_id, disparos_semana_dict):
     conn = get_conn()

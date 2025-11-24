@@ -331,6 +331,12 @@ def alternar_base_tratada(vendedor_id):
     # Mantém os filtros/queries da página
     return redirect(url_for('vendedores', **request.args))
 
+@app.route('/mudar_status_vendedor/<int:vendedor_id>/<novo_status>', methods=['POST'])
+def mudar_status_vendedor(vendedor_id, novo_status):
+    sucesso = update_status_vendedor(vendedor_id, novo_status)
+    if not sucesso:
+        flash("Erro ao alterar status")
+    return redirect(url_for('vendedores'))
 
 # ---------------------- ROTAS DE LOJAS ----------------------
 @app.route('/lojas', methods=['GET','POST'])
@@ -377,19 +383,6 @@ def editar_loja():
     else:
         flash('Erro de validação ao editar a loja.', 'warning')
     return redirect(url_for('lojas'))
-
-@app.route("/alterar_status/<int:id_vendedor>/<novo_status>")
-def alterar_status(id_vendedor, novo_status):
-    try:
-        ok = update_status_vendedor(id_vendedor, novo_status, supabase)
-        if ok:
-            flash("Status alterado com sucesso!", "success")
-        else:
-            flash("Erro ao alterar status", "danger")
-    except Exception as e:
-        flash(f"Erro ao alterar status: {e}", "danger")
-
-    return redirect(url_for("home"))
 
 # ---------------------- ROTAS DE PDF ----------------------
 @app.route('/gerar_relatorio_pdf', methods=['POST'])
