@@ -155,13 +155,22 @@ def insert_vendedor(v):
     cur.close(); conn.close()
     return dict(row)
 
-def update_vendedor_status(vendedor_id, novo_status):
+def update_status_vendedor(vendedor_id, novo_status):
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("UPDATE vendedores SET status=%s, ultimo_status_tipo=%s, ultimo_status_data=%s WHERE id=%s;",
-                (novo_status, novo_status, date.today().strftime('%d/%m/%Y'), vendedor_id))
+
+    cur.execute("""
+        UPDATE vendedores
+        SET status = %s,
+            ultimo_status_tipo = %s,
+            ultimo_status_data = TO_CHAR(CURRENT_DATE, 'DD/MM/YYYY')
+        WHERE id = %s;
+    """, (novo_status, novo_status, vendedor_id))
+
     conn.commit()
-    cur.close(); conn.close()
+    cur.close()
+    conn.close()
+
 
 def alternar_base_tratada(vendedor_id):
     conn = get_conn()
