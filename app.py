@@ -244,14 +244,27 @@ def painel():
                            loja_edit_form=loja_edit_form,
                            relatorio_form=relatorio_form)
 
-@app.route('/editar_disparos_dia', methods=['POST'])
-def editar_disparos_dia():
+@app.route('/editar_disparos_semana', methods=['POST'])
+def editar_disparos_semana():
     vendedor_id = int(request.form.get('vendedor_id'))
-    disparos_dia = int(request.form.get('disparos_dia', 0))
-    database.update_disparos_dia(vendedor_id, disparos_dia)
-    flash(f"Disparos diários do vendedor atualizados para {disparos_dia}.", "success")
-    return redirect(request.referrer or url_for('painel'))
 
+    # Disparos da semana enviados pelo formulário
+    dias_semana = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
+    disparos_semana = {}
+
+    # Lê cada dia do formulário e transforma em inteiro
+    for dia in dias_semana:
+        valor = request.form.get(dia, 0)
+        try:
+            disparos_semana[dia] = int(valor)
+        except ValueError:
+            disparos_semana[dia] = 0
+
+    # Atualiza no banco usando database.py
+    database.update_disparos_semanais(vendedor_id, disparos_semana)
+
+    flash("Disparos semanais atualizados com sucesso!", "success")
+    return redirect(request.referrer or url_for('painel'))
 # ---------------------- ROTAS DE VENDEDORES ----------------------
 @app.route('/vendedores', methods=['GET', 'POST'])
 def vendedores():
