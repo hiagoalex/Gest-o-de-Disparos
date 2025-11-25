@@ -388,7 +388,7 @@
     <td class="text-center"><span class="badge bg-success">{{ vendedor.disparos_semana | default(0) }}</span></td>
 
     <td class="text-center">
-        <form method="POST" action="{{ url_for('deletar_vendedor', id=vendedor.id) }}" style="display:inline;">
+        <form method="POST" action="{{ url_for('deletar_vendedor', vendedor_id=vendedor.id) }}" style="display:inline;">
             <button type="submit" class="btn btn-danger btn-sm"
             onclick="return confirm('Deseja realmente excluir este vendedor?')">
                 <i class="bi bi-trash"></i>
