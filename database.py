@@ -250,13 +250,12 @@ def listar_vendedores_com_disparos():
     return vendedores
 
 def atualizar_disparos_dia(vendedor_id, disparos_hoje):
-    from app import conn
+    conn = get_conn()
     cursor = conn.cursor()
-
     try:
         cursor.execute("""
             UPDATE vendedores
-            SET disparos_hoje = %s
+            SET disparos_dia = %s
             WHERE id = %s
         """, (disparos_hoje, vendedor_id))
         conn.commit()
@@ -266,3 +265,4 @@ def atualizar_disparos_dia(vendedor_id, disparos_hoje):
         raise e
     finally:
         cursor.close()
+        conn.close()
