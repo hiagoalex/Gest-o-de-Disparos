@@ -244,3 +244,10 @@ def listar_vendedores_com_disparos():
             'sexta': 0, 'sabado': 0, 'domingo': 0
         }
     return vendedores
+
+def deletar_loja(loja_id):
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM vendedores WHERE loja_id = %s", (loja_id,))
+    cursor.execute("DELETE FROM lojas WHERE id = %s", (loja_id,))
+    conn.commit()
+    cursor.close()

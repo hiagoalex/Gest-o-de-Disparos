@@ -426,36 +426,52 @@
                                 <ul class="dropdown-menu dropdown-menu-end">
                                     <li class="dropdown-header">Mudar Status para:</li>
 
-                                    {% if current_status != 'Conectado' %}
-                                        <li>
-                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Restrito') }}">
-                                                <button type="submit" class="dropdown-item text-success"><i class="bi bi-plug-fill me-2"></i> Conectado</button>
-                                            </form>
+                                   {% if current_status != 'Conectado' %}
+                            <li>
+                                <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Conectado') }}">
+                                <button type="submit" class="dropdown-item text-success">
+                                <i class="bi bi-plug-fill me-2"></i> Conectado
+                                </button>
+                                </form>
+                            </li>
+                                {% endif %}
+
+                                {% if current_status != 'Restrito' %}
+                            <li>
+                                <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Restrito') }}">
+                                <button type="submit" class="dropdown-item text-warning">
+                                 <i class="bi bi-shield-lock me-2"></i> Restrito
+                                </button>
+                            </form>
+                            </li>
+                            {% endif %}
+
+                                {% if current_status != 'Bloqueado' %}
+                            <li>
+                                <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Bloqueado') }}">
+                                 <button type="submit" class="dropdown-item text-danger">
+                                <i class="bi bi-lock-fill me-2"></i> Bloqueado
+                            </button>
+                            </form>
+                            </li>
+                            {% endif %}
+
+                            {% if current_status != 'Desconectado' %}
+                        <li>
+                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Desconectado') }}">
+                            <button type="submit" class="dropdown-item text-secondary">
+                             <i class="bi bi-slash-circle me-2"></i> Desconectado
+                             </button>
+                            </form>
+                        </li>
+                            {% endif %}
+                                        <li>  <form method="POST" action="{{ url_for('deletar_vendedor', vendedor_id=vendedor.id) }}" style="display:inline;">
+                                            <button class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir este vendedor?')">
+                                            <i class="bi bi-trash"></i>
+                                                                                                                                                        </button>
+                                        </form>
                                         </li>
-                                    {% endif %}
-                                    
-                                    {% if current_status != 'Restrito' %}
-                                        <li>
-                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Restrito') }}">
-                                                <button type="submit" class="btn btn-warning">Restringir</button>
-                                            </form>
-                                        </li>
-                                    {% endif %}
-                                    
-                                    {% if current_status != 'Bloqueado' %}
-                                        <li>
-                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Restrito') }}">
-                                                <button type="submit" class="dropdown-item text-danger"><i class="bi bi-lock-fill me-2"></i> Bloqueado</button>
-                                            </form>
-                                        </li>
-                                    {% endif %}
-                                    
-                                    {% if current_status != 'Desconectado' %}
-                                        <li>
-                                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Restrito') }}">
-                                                <button type="submit" class="dropdown-item text-secondary"><i class="bi bi-slash-circle me-2"></i> Desconectado</button>
-                                            </form>
-                                        </li>
+
                                     {% endif %}
                                 </ul>
                             </div>
@@ -493,6 +509,10 @@
                         <h6>Dados do Gestor</h6>
                         
                         <div class="mb-3">
+                            {{ loja_form.nome_vendedor.label(class="form-label") }}{{ loja_form.nome_vendedor(class="form-control") }}
+                            {% for error in loja_form.nome_vendedor.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
+                        <div class="mb-3">
                             {{ loja_form.email_vendedor.label(class="form-label") }}{{ loja_form.email_vendedor(class="form-control") }}
                             {% for error in loja_form.email_vendedor.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
                         </div>
@@ -519,6 +539,11 @@
                             {{ vendedor_form.nome.label(class="form-label") }}
                             {{ vendedor_form.nome(class="form-control") }}
                             {% for error in vendedor_form.nome.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
+                        <div class="mb-3">
+                            {{ vendedor_form.email.label(class="form-label") }}
+                            {{ vendedor_form.email(class="form-control") }}
+                            {% for error in vendedor_form.email.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
                         </div>
                         <div class="mb-3">
                             {{ vendedor_form.loja_id.label(class="form-label") }}
@@ -558,7 +583,11 @@
                             {{ loja_edit_form.nome(class="form-control", id="modal-nome-loja") }}
                             {% for error in loja_edit_form.nome.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
                         </div>
-
+                        <div class="mb-3">
+                            {{ loja_edit_form.responsavel.label(class="form-label") }}
+                            {{ loja_edit_form.responsavel(class="form-control", id="modal-responsavel-loja") }}
+                            {% for error in loja_edit_form.responsavel.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
