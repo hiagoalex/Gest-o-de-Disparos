@@ -323,13 +323,18 @@ def vendedores():
     )
 @app.route("/delete_vendedor/<int:id>", methods=["POST"])
 def delete_vendedor(id):
-    try:
-        database.delete_vendedor(id)
-        flash("Vendedor deletado com sucesso!", "success")
-    except Exception as e:
-        print("Erro ao deletar vendedor:", e)
-        flash("Erro ao deletar vendedor.", "danger")
-    return redirect(url_for("vendedores"))
+    vendedor = Vendedor.query.get(id)
+
+    if not vendedor:
+        flash("Vendedor não encontrado.", "danger")
+        return redirect(url_for('vendedores'))
+
+    db.session.delete(vendedor)
+    db.session.commit()
+    flash("Vendedor excluído com sucesso!", "success")
+
+    return redirect(url_for('vendedores'))
+
 
 
 @app.route('/mudar_status_vendedor/<int:vendedor_id>/<novo_status>', methods=['POST'])
@@ -393,16 +398,6 @@ def editar_loja():
         flash('Erro de validação ao editar a loja.', 'warning')
     return redirect(url_for('lojas'))
 
-@app.route("/delete_vendedor/<int:id>", methods=["POST"])
-def delete_vendedor(id):
-    vendedor = Vendedor.query.get(id)
-    if vendedor:
-        db.session.delete(vendedor)
-        db.session.commit()
-        flash("Vendedor deletado com sucesso!", "success")
-    else:
-        flash("Vendedor não encontrado.", "danger")
-    return redirect(url_for("vendedores"))
 
 # ---------------------- ROTAS DE PDF ----------------------
 @app.route('/gerar_relatorio_pdf')
