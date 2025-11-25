@@ -386,7 +386,7 @@
                 data-vendedor-id="{{ vendedor.id }}"
                 data-vendedor-nome="{{ vendedor.nome }}"
                 {% for dia in ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'] %}
-                    data-disparo-{{ dia }}="{{ vendedor.disparos_semana_dia[dia] | default(0) }}"
+                    data-disparo-{{ dia }}="{{ vendedor.disparos_semanais.get(dia, 0) if vendedor.disparos_semanais else 0 }}"
                 {% endfor %}>
             Disparos Semana
         </button>
