@@ -321,21 +321,6 @@ def vendedores():
         relatorio_form=relatorio_form,
         today_date=date.today()
     )
-@app.route("/delete_vendedor/<int:id>", methods=["POST"])
-def delete_vendedor(id):
-    vendedor = Vendedor.query.get(id)
-
-    if not vendedor:
-        flash("Vendedor não encontrado.", "danger")
-        return redirect(url_for('vendedores'))
-
-    db.session.delete(vendedor)
-    db.session.commit()
-    flash("Vendedor excluído com sucesso!", "success")
-
-    return redirect(url_for('vendedores'))
-
-
 
 @app.route('/mudar_status_vendedor/<int:vendedor_id>/<novo_status>', methods=['POST'])
 def mudar_status_vendedor(vendedor_id, novo_status):
