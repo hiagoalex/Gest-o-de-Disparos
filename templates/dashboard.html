@@ -356,128 +356,67 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for vendedor in vendedores %}
-                    <tr>
-                        <td>{{ vendedor.nome }}</td>
-                        <td>{{ vendedor.loja }}</td>
-                        <td><span class="status-{{ vendedor.status | lower }}">{{ vendedor.status }}</span></td>
-                        
-                        {# AQUI EXIBIMOS O STATUS ATUAL (ÚLTIMO REGISTRADO) E DATA DE ALTERAÇÃO (INCLUINDO DATA DE BLOQUEIO) #}
-                        <td>
-                            {% if vendedor.ultimo_status_tipo == 'Bloqueado' %}
-                                <span class="badge bg-danger">{{ vendedor.ultimo_status_tipo }}</span> desde {{ vendedor.ultimo_status_data }}
-                            {% else %}
-                                <span class="badge bg-secondary">{{ vendedor.ultimo_status_tipo }}</span> desde {{ vendedor.ultimo_status_data }}
-                            {% endif %}
-                        </td>
+                   {% for vendedor in vendedores %}
+    <tr>
+        <td>{{ vendedor.nome }}</td>
+        <td>{{ vendedor.email }}</td>
+        <td>{{ vendedor.status }}</td>
+        <td>
 
-                        <td>
-                            {% if vendedor.base_tratada %}
-                                <span class="badge bg-success"><i class="bi bi-check-circle"></i> Tratada</span>
-                            {% else %}
-                                <span class="badge bg-warning text-dark"><i class="bi bi-x-octagon"></i> Pendente</span>
-                            {% endif %}
-                        </td>
+            <div class="dropdown">
+                <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    Alterar Status
+                </button>
+                <ul class="dropdown-menu">
 
-                        <td class="text-center">
-                            <span class="fw-bold me-2">{{ vendedor.disparos_dia }}</span>
-                            <button type="button" class="btn btn-sm btn-outline-secondary p-1" 
-                                data-bs-toggle="modal" 
-                                data-bs-target="#editarDisparosModal"
-                                data-vendedor-id="{{ vendedor.id }}"
-                                data-disparos-hoje="{{ vendedor.disparos_dia }}"
-                                data-vendedor-nome="{{ vendedor.nome }}"
-                                title="Editar Disparos Diários">
-                                <i class="bi bi-pencil-square"></i>
-                            </button>
-                        </td>
-                        
-                        <td class="text-center">
-                            <button type="button" class="btn btn-sm btn-outline-info" 
-                                data-bs-toggle="modal" 
-                                data-bs-target="#editarDisparosSemanaisModal"
-                                data-vendedor-id="{{ vendedor.id }}"
-                                data-vendedor-nome="{{ vendedor.nome }}"
-                                title="Ver/Editar Disparos Semanais"
-                                {% for dia, total in vendedor.disparos_semanais.items() %}
-                                    data-disparo-{{ dia | lower }}="{{ total }}"
-                                {% endfor %}>
-                                <i class="bi bi-calendar-week"></i> Info
-                            </button>
-                        </td>
+                    {% set current_status = vendedor.status %}
 
-                        <td class="text-center">
-                            {% set current_status = vendedor.status %}
-                            {% set current_vendedor_id = vendedor.id %}
-                            
-                           <form method="POST" action="{{ url_for('alternar_base_tratada', vendedor_id=vendedor.id, **request.args) }}" style="display:inline; margin-right: 5px;">
-                                <button type="submit" class="btn btn-secondary btn-sm">
-                                    Alternar Base
-                                </button>
-                            </form>
+                    {% if current_status != 'Conectado' %}
+                    <li>
+                        <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Conectado') }}">
+                            <button type="submit" class="dropdown-item text-success">Conectado</button>
+                        </form>
+                    </li>
+                    {% endif %}
 
+                    {% if current_status != 'Restrito' %}
+                    <li>
+                        <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Restrito') }}">
+                            <button type="submit" class="dropdown-item text-warning">Restrito</button>
+                        </form>
+                    </li>
+                    {% endif %}
 
+                    {% if current_status != 'Bloqueado' %}
+                    <li>
+                        <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Bloqueado') }}">
+                            <button type="submit" class="dropdown-item text-danger">Bloqueado</button>
+                        </form>
+                    </li>
+                    {% endif %}
 
-                            {# Menu Dropdown para Ações de Status #}
-                            <div class="btn-group">
-                                <button type="button" class="btn btn-sm btn-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" title="Mudar Status do Vendedor">
-                                    <i class="bi bi-three-dots"></i>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li class="dropdown-header">Mudar Status para:</li>
+                    {% if current_status != 'Desconectado' %}
+                    <li>
+                        <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Desconectado') }}">
+                            <button type="submit" class="dropdown-item text-secondary">Desconectado</button>
+                        </form>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
 
-                                   {% if current_status != 'Conectado' %}
-                            <li>
-                                <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Conectado') }}">
-                                <button type="submit" class="dropdown-item text-success">
-                                <i class="bi bi-plug-fill me-2"></i> Conectado
-                                </button>
-                                </form>
-                            </li>
-                                {% endif %}
+        </td>
+        <td>
+            <form method="POST" action="{{ url_for('delete_vendedor', id=vendedor.id) }}" style="display:inline;">
+                <button type="submit" class="btn btn-danger btn-sm"
+                        onclick="return confirm('Deseja realmente excluir este vendedor?')">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </form>
+        </td>
+    </tr>
+{% endfor %}
 
-                                {% if current_status != 'Restrito' %}
-                            <li>
-                                <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Restrito') }}">
-                                <button type="submit" class="dropdown-item text-warning">
-                                 <i class="bi bi-shield-lock me-2"></i> Restrito
-                                </button>
-                            </form>
-                            </li>
-                            {% endif %}
-
-                                {% if current_status != 'Bloqueado' %}
-                            <li>
-                                <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Bloqueado') }}">
-                                 <button type="submit" class="dropdown-item text-danger">
-                                <i class="bi bi-lock-fill me-2"></i> Bloqueado
-                            </button>
-                            </form>
-                            </li>
-                            {% endif %}
-
-                            {% if current_status != 'Desconectado' %}
-                        <li>
-                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Desconectado') }}">
-                            <button type="submit" class="dropdown-item text-secondary">
-                             <i class="bi bi-slash-circle me-2"></i> Desconectado
-                             </button>
-                            </form>
-                        </li>
-                            {% endif %}
-                                        <li>  <form method="POST" action="{{ url_for('delete_vendedor', id=vendedor.id) }}" style="display:inline;">
-                                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Deseja realmente excluir este vendedor?')">
-                                                <i class="bi bi-trash"></i>
-                                                    </button>
-                                        </form>
-                                        </li>
-
-                                    {% endif %}
-                                </ul>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
                 </tbody>
             </table>
 
