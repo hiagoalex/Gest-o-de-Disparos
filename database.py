@@ -251,18 +251,14 @@ def listar_vendedores_com_disparos():
 
 def atualizar_disparos_dia(vendedor_id, disparos_hoje):
     conn = get_conn()
-    cursor = conn.cursor()
+    cur = conn.cursor()
     try:
-        cursor.execute("""
-            UPDATE vendedores
-            SET disparos_dia = %s
-            WHERE id = %s
-        """, (disparos_hoje, vendedor_id))
+        cur.execute("UPDATE vendedores SET disparos_dia=%s WHERE id=%s;", (disparos_hoje, vendedor_id))
         conn.commit()
     except Exception as e:
         conn.rollback()
         print(f"Erro ao atualizar disparos do dia: {e}")
         raise e
     finally:
-        cursor.close()
+        cur.close()
         conn.close()
