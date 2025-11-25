@@ -357,45 +357,45 @@
                 </thead>
 <tbody>
 {% for vendedor in vendedores %}
-<tr>
-    <td>{{ vendedor.nome }}</td>
-    <td>{{ vendedor.loja_nome }}</td>
-    <td>{{ vendedor.status }}</td>
-    <td class="text-center"><span class="badge bg-secondary">{{ vendedor.base_contatos | default(0) }}</span></td>
-    <td class="text-center"><span class="badge bg-primary">{{ vendedor.disparos_hoje | default(0) }}</span></td>
-    <td class="text-center"><span class="badge bg-success">{{ vendedor.disparos_semana | default(0) }}</span></td>
+<div class="col-md-4">
+    <div class="card shadow-sm border-0 mb-3">
+        <div class="card-body">
+            <h5 class="card-title">{{ vendedor['nome'] }}</h5>
+            <p class="card-text small text-muted">{{ vendedor['email'] }}</p>
+            <span class="badge bg-info">{{ vendedor['status'] }}</span>
 
-    <td class="text-center" style="width:150px;">
+            <hr class="my-2">
 
-        <!-- ALTERAR STATUS (colocado corretamente no menu de ações) -->
-        <div class="dropdown d-inline">
-            <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                Status
+            <p class="small mb-1">📌 Disparos hoje: 
+                <strong>{{ vendedor['disparos_hoje'] or 0 }}</strong>
+            </p>
+
+            <p class="small mb-3">📆 Total na semana: 
+                <strong>{{ vendedor['disparos_semana'] or 0 }}</strong>
+            </p>
+
+            <button class="btn btn-sm btn-primary"
+                data-bs-toggle="modal"
+                data-bs-target="#editarDisparosModal"
+                data-vendedor-id="{{ vendedor['id'] }}"
+                data-vendedor-nome="{{ vendedor['nome'] }}">
+                ➕ Adicionar disparos hoje
             </button>
-            <ul class="dropdown-menu">
-                {% set current_status = vendedor.status %}
-                {% for status in ['Conectado', 'Restrito', 'Bloqueado', 'Desconectado'] %}
-                    {% if status != current_status %}
-                        <li>
-                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status=status) }}">
-                                <button type="submit" class="dropdown-item">{{ status }}</button>
-                            </form>
-                        </li>
-                    {% endif %}
-                {% endfor %}
-            </ul>
+
+            <button class="btn btn-sm btn-warning mt-1"
+                data-bs-toggle="modal"
+                data-bs-target="#editarDisparosSemanaisModal"
+                data-vendedor-id="{{ vendedor['id'] }}"
+                data-vendedor-nome="{{ vendedor['nome'] }}">
+                📅 Editar semana
+            </button>
+
+            <form method="POST" action="{{ url_for('deletar_vendedor', vendedor_id=vendedor['id']) }}" class="d-inline">
+                <button class="btn btn-sm btn-danger mt-1">🗑️ Remover</button>
+            </form>
         </div>
-
-        <!-- DELETAR -->
-        <form method="POST" action="{{ url_for('deletar_vendedor', vendedor_id=vendedor.id) }}" style="display:inline;">
-            <button type="submit" class="btn btn-danger btn-sm"
-            onclick="return confirm('Deseja realmente excluir este vendedor?')">
-                <i class="bi bi-trash"></i>
-            </button>
-        </form>
-
-    </td>
-</tr>
+    </div>
+</div>
 {% endfor %}
 </tbody>
 
