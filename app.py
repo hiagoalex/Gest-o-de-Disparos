@@ -89,9 +89,12 @@ class RelatorioForm(FlaskForm):
 # Helpers
 def processar_dados_painel():
     vendedores = database.listar_vendedores()
-    for v in vendedores:
-        ds = database.get_disparos_semanais(v['id'])
-        v['disparos_semanais'] = ds if ds else gerar_disparos_semanais_simulados()
+for v in vendedores:
+    ds = database.get_disparos_semanais(v['id'])
+    if not ds:
+        # novo vendedor → inicia com zeros
+        ds = {dia: 0 for dia in ['segunda','terca','quarta','quinta','sexta','sabado','domingo']}
+    v['disparos_semanais'] = ds
     total_disparos = sum(sum(v['disparos_semanais'].values()) for v in vendedores)
     status_kpis = defaultdict(int)
     vendedores_por_status = defaultdict(list)
