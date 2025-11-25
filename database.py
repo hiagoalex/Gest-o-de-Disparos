@@ -252,7 +252,7 @@ def delete_loja(id):
     cursor.close()
 
 def deletar_vendedor(vendedor_id):
-    from app import conn  # se você usa a conn no app.py
+    conn = connection()  # abre nova conexão
     cursor = conn.cursor()
 
     try:
@@ -264,3 +264,4 @@ def deletar_vendedor(vendedor_id):
         raise e
     finally:
         cursor.close()
+        conn.close()  # fecha a conexão corretamente
