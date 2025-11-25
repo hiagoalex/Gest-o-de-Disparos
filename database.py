@@ -245,9 +245,8 @@ def listar_vendedores_com_disparos():
         }
     return vendedores
 
-def deletar_loja(loja_id):
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM vendedores WHERE loja_id = %s", (loja_id,))
-    cursor.execute("DELETE FROM lojas WHERE id = %s", (loja_id,))
+def delete_loja(id):
+    query = "DELETE FROM lojas WHERE id = %s"
+    cursor.execute(query, (id,))
     conn.commit()
     cursor.close()

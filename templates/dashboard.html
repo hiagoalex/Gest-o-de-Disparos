@@ -355,70 +355,50 @@
                         <th class="text-center" style="width: 150px;">Ações Rápidas</th>
                     </tr>
                 </thead>
-                <tbody>
-                   {% for vendedor in vendedores %}
-    <tr>
-        <td>{{ vendedor.nome }}</td>
-        <td>{{ vendedor.email }}</td>
-        <td>{{ vendedor.status }}</td>
-        <td>
+        <tbody>
+{% for vendedor in vendedores %}
+<tr>
+    <td>{{ vendedor.nome }}</td>
+    <td>{{ vendedor.loja_nome }}</td>  {# Mostra o nome da loja #}
+    <td>{{ vendedor.status }}</td>
 
-            <div class="dropdown">
-                <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                    Alterar Status
-                </button>
-                <ul class="dropdown-menu">
+    <td>
+        <div class="dropdown">
+            <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                Alterar Status
+            </button>
+            <ul class="dropdown-menu">
+                {% set current_status = vendedor.status %}
 
-                    {% set current_status = vendedor.status %}
-
-                    {% if current_status != 'Conectado' %}
-                    <li>
-                        <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Conectado') }}">
-                            <button type="submit" class="dropdown-item text-success">Conectado</button>
-                        </form>
-                    </li>
+                {% for status in ['Conectado', 'Restrito', 'Bloqueado', 'Desconectado'] %}
+                    {% if status != current_status %}
+                        <li>
+                            <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status=status) }}">
+                                <button type="submit" class="dropdown-item">{{ status }}</button>
+                            </form>
+                        </li>
                     {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+    </td>
 
-                    {% if current_status != 'Restrito' %}
-                    <li>
-                        <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Restrito') }}">
-                            <button type="submit" class="dropdown-item text-warning">Restrito</button>
-                        </form>
-                    </li>
-                    {% endif %}
+    <td class="text-center"><span class="badge bg-secondary">{{ vendedor.base_contatos | default(0) }}</span></td>
+    <td class="text-center"><span class="badge bg-primary">{{ vendedor.disparos_hoje | default(0) }}</span></td>
+    <td class="text-center"><span class="badge bg-success">{{ vendedor.disparos_semana | default(0) }}</span></td>
 
-                    {% if current_status != 'Bloqueado' %}
-                    <li>
-                        <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Bloqueado') }}">
-                            <button type="submit" class="dropdown-item text-danger">Bloqueado</button>
-                        </form>
-                    </li>
-                    {% endif %}
+    <td class="text-center">
+        <form method="POST" action="{{ url_for('delete_vendedor', id=vendedor.id) }}" style="display:inline;">
+            <button type="submit" class="btn btn-danger btn-sm"
+            onclick="return confirm('Deseja realmente excluir este vendedor?')">
+                <i class="bi bi-trash"></i>
+            </button>
+        </form>
+    </td>
+</tr>
+{% endfor %}
+</tbody>
 
-                    {% if current_status != 'Desconectado' %}
-                    <li>
-                        <form method="POST" action="{{ url_for('mudar_status_vendedor', vendedor_id=vendedor.id, novo_status='Desconectado') }}">
-                            <button type="submit" class="dropdown-item text-secondary">Desconectado</button>
-                        </form>
-                    </li>
-                    {% endif %}
-                </ul>
-            </div>
-
-        </td>
-        <td>
-            <form method="POST" action="{{ url_for('delete_vendedor', id=vendedor.id) }}" style="display:inline;">
-                            <button type="submit" class="btn btn-danger btn-sm"
-                            onclick="return confirm('Deseja realmente excluir este vendedor?')">
-                            <i class="bi bi-trash"></i>
-                            </button>
-            </form>
-
-        </td>
-    </tr>
-    {% endfor %}
-
-                </tbody>
             </table>
 
         {% endif %}
