@@ -522,7 +522,7 @@
     <div class="modal fade" id="editarDisparosModal" tabindex="-1" aria-labelledby="editarDisparosModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
-                <form method="POST" action="{{ url_for('editar_disparos_semana') }}">
+                <form method="POST" action="{{ url_for('editar_disparos_dia') }}">
                     <input type="hidden" name="vendedor_id" id="modal-vendedor-id-dia">
                     <div class="modal-header">
                         <h5 class="modal-title" id="editarDisparosModalLabel">Editar Disparos Diários para: <span id="modal-vendedor-nome-dia"></span></h5>
@@ -532,7 +532,8 @@
                         <div class="mb-3">
                             <label for="disparos-hoje-input" class="form-label">Total de Disparos Hoje ({{ today_date.strftime('%d/%m/%Y') }}):</label>
                             
-                            <input type="number" class="form-control" id="disparos-hoje-input" name="disparos_hoje" required min="0" value="{{ vendedor['disparos_hoje'] or 0 }}">
+                            <input type="number" class="form-control" id="disparos-hoje-input" name="disparos_hoje" required min="0" value="0">
+
 
                         </div>
                     </div>
@@ -694,7 +695,7 @@
             }
         });
     </script>
-    
+
     <script>
     var editarDiaModal = document.getElementById('editarDisparosModal');
     editarDiaModal.addEventListener('show.bs.modal', function (event) {
