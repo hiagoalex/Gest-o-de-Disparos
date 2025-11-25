@@ -4,32 +4,30 @@ import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv
 import sys
-import urllib.parse as urlparse
 from datetime import date
 
 load_dotenv()
 
 # ==============================
-# CORREÇÃO SSL PARA O RENDER
+# CONFIGURAÇÃO DO DATABASE + SSL
 # ==============================
 raw_url = os.getenv("DATABASE_URL")
 
 if not raw_url:
     print("ERRO: DATABASE_URL não configurado nas variáveis de ambiente.", file=sys.stderr)
 else:
-    # Evita duplicar sslmode se já existir
     if "sslmode" not in raw_url:
         raw_url += "?sslmode=require"
 
 DATABASE_URL = raw_url
+
 
 # ==============================
 # FUNÇÃO DE CONEXÃO
 # ==============================
 def get_conn():
     try:
-        conn = psycopg2.connect(DATABASE_URL)
-        return conn
+        return psycopg2.connect(DATABASE_URL)
     except Exception as e:
         print("Erro ao conectar ao banco:", e, file=sys.stderr)
         raise
@@ -84,11 +82,11 @@ def ensure_tables():
     cur.close()
     conn.close()
 
-# Chama ao importar
+# Garante as tabelas
 try:
     ensure_tables()
 except Exception as e:
-    print("Aviso: ensure_tables erro (pode ser ignorado se já criado):", e)
+    print("Aviso: ensure_tables erro (pode ser ignorado):", e)
 
 
 # ==============================
@@ -103,6 +101,7 @@ def listar_lojas():
     cur.close(); conn.close()
     return [dict(r) for r in data]
 
+
 def get_loja_by_id(loja_id):
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -111,21 +110,6 @@ def get_loja_by_id(loja_id):
     cur.close(); conn.close()
     return dict(row) if row else None
 
-def listar_vendedores():
-    conn = get_conn()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT * FROM vendedores ORDER BY id;")
-    data = cur.fetchall()
-    cur.close(); conn.close()
-    return [dict(r) for r in data]
-
-def get_vendedores_by_loja(loja_id):
-    conn = get_conn()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT * FROM vendedores WHERE loja_id = %s ORDER BY id;", (loja_id,))
-    data = cur.fetchall()
-    cur.close(); conn.close()
-    return [dict(r) for r in data]
 
 def insert_loja(nome, responsavel):
     conn = get_conn()
@@ -136,6 +120,7 @@ def insert_loja(nome, responsavel):
     cur.close(); conn.close()
     return dict(row)
 
+
 def update_loja(loja_id, nome, responsavel):
     conn = get_conn()
     cur = conn.cursor()
@@ -143,22 +128,45 @@ def update_loja(loja_id, nome, responsavel):
     conn.commit()
     cur.close(); conn.close()
 
+
+# ---------- VENDEDORES ----------
+
+def listar_vendedores():
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM vendedores ORDER BY id;")
+    data = cur.fetchall()
+    cur.close(); conn.close()
+    return [dict(r) for r in data]
+
+
+def get_vendedores_by_loja(loja_id):
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM vendedores WHERE loja_id = %s ORDER BY id;", (loja_id,))
+    data = cur.fetchall()
+    cur.close(); conn.close()
+    return [dict(r) for r in data]
+
+
 def insert_vendedor(v):
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute("""
         INSERT INTO vendedores (nome, email, loja_id, status, base_tratada, disparos_dia, ultimo_status_tipo, ultimo_status_data)
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *;
-    """, (v.get('nome'), v.get('email'), v.get('loja_id'), v.get('status'), v.get('base_tratada', False), v.get('disparos_dia',0), v.get('ultimo_status_tipo'), v.get('ultimo_status_data')))
+    """, (v.get('nome'), v.get('email'), v.get('loja_id'), v.get('status'),
+          v.get('base_tratada', False), v.get('disparos_dia',0),
+          v.get('ultimo_status_tipo'), v.get('ultimo_status_data')))
     row = cur.fetchone()
     conn.commit()
     cur.close(); conn.close()
     return dict(row)
 
+
 def update_status_vendedor(vendedor_id, novo_status):
     conn = get_conn()
     cur = conn.cursor()
-
     cur.execute("""
         UPDATE vendedores
         SET status = %s,
@@ -166,50 +174,44 @@ def update_status_vendedor(vendedor_id, novo_status):
             ultimo_status_data = TO_CHAR(CURRENT_DATE, 'DD/MM/YYYY')
         WHERE id = %s;
     """, (novo_status, novo_status, vendedor_id))
-
     conn.commit()
-    cur.close()
-    conn.close()
+    cur.close(); conn.close()
 
-def alternar_base_tratada(vendedor_id):
+
+def deletar_vendedor(vendedor_id):
+    conn = get_conn()
+    cur = conn.cursor()
     try:
-        conn = psycopg2.connect(current_app.config['DATABASE_URL'], sslmode='require')
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        # Busca o vendedor
-        cursor.execute("SELECT * FROM vendedores WHERE id = %s", (vendedor_id,))
-        row = cursor.fetchone()  # <-- row existe aqui
-        
-        if row:  # Certifica que encontrou o vendedor
-            novo_valor = not row['base_tratada']  # exemplo de booleano
-            cursor.execute("UPDATE vendedores SET base_tratada = %s WHERE id = %s", (novo_valor, vendedor_id))
-            conn.commit()
-        
-        cursor.close()
-        conn.close()
+        cur.execute("DELETE FROM vendedores WHERE id = %s", (vendedor_id,))
+        conn.commit()
+        return True
     except Exception as e:
-        print(f"Erro ao alterar base tratada: {e}")
-    
-    return redirect(url_for('vendedores'))
+        conn.rollback()
+        print(f"Erro ao deletar vendedor: {e}")
+        return False
+    finally:
+        cur.close()
+        conn.close()
 
 
-def update_disparos_semanais(vendedor_id, disparos_semana_dict):
+# --------- DISPAROS ---------
+
+def update_disparos_semanais(vendedor_id, d):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("SELECT id FROM disparos_semanais WHERE vendedor_id=%s;", (vendedor_id,))
     exists = cur.fetchone()
 
     valores = (
-        disparos_semana_dict.get('segunda',0), disparos_semana_dict.get('terca',0),
-        disparos_semana_dict.get('quarta',0), disparos_semana_dict.get('quinta',0),
-        disparos_semana_dict.get('sexta',0), disparos_semana_dict.get('sabado',0),
-        disparos_semana_dict.get('domingo',0)
+        d.get('segunda',0), d.get('terca',0), d.get('quarta',0),
+        d.get('quinta',0), d.get('sexta',0), d.get('sabado',0),
+        d.get('domingo',0)
     )
 
     if exists:
         cur.execute("""
-            UPDATE disparos_semanais SET segunda=%s, terca=%s, quarta=%s, quinta=%s, sexta=%s, sabado=%s, domingo=%s
-            WHERE vendedor_id=%s;
+            UPDATE disparos_semanais SET segunda=%s, terca=%s, quarta=%s, quinta=%s,
+            sexta=%s, sabado=%s, domingo=%s WHERE vendedor_id=%s;
         """, valores + (vendedor_id,))
     else:
         cur.execute("""
@@ -220,6 +222,7 @@ def update_disparos_semanais(vendedor_id, disparos_semana_dict):
     conn.commit()
     cur.close(); conn.close()
 
+
 def get_disparos_semanais(vendedor_id):
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -228,53 +231,10 @@ def get_disparos_semanais(vendedor_id):
     cur.close(); conn.close()
     return dict(row) if row else None
 
+
 def update_disparos_dia(vendedor_id, valor):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("UPDATE vendedores SET disparos_dia=%s WHERE id=%s;", (valor, vendedor_id))
     conn.commit()
     cur.close(); conn.close()
-
-def listar_vendedores_com_disparos():
-    vendedores = listar_vendedores()
-    for v in vendedores:
-        disparos = get_disparos_semanais(v['id'])
-        v['disparos_semanais'] = disparos if disparos else {
-            'segunda': 0, 'terca': 0, 'quarta': 0, 'quinta': 0,
-            'sexta': 0, 'sabado': 0, 'domingo': 0
-        }
-    return vendedores
-
-def delete_loja(id):
-    query = "DELETE FROM lojas WHERE id = %s"
-    cursor.execute(query, (id,))
-    conn.commit()
-    cursor.close()
-
-def listar_vendedores():
-    conn = connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT id, nome, telefone FROM vendedores ORDER BY id DESC")
-    vendedores = cursor.fetchall()
-
-    cursor.close()
-    conn.close()
-    return vendedores
-
-def deletar_vendedor(vendedor_id):
-    conn = connection()
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute("DELETE FROM vendedores WHERE id = %s", (vendedor_id,))
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        print(f"Erro ao deletar vendedor: {e}")
-        return False
-    finally:
-        cursor.close()
-        conn.close()
-
-    return True
