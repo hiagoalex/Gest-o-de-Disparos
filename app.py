@@ -241,9 +241,13 @@ def painel():
     loja_edit_form = LojaEditForm()
     relatorio_form = RelatorioForm()
     vendedores = database.listar_vendedores()
-    for v in vendedores:
+vendedores = database.listar_vendedores()
+for v in vendedores:
+    v['disparos_hoje'] = database.get_disparos_hoje(v['id']) or 0
     ds = database.get_disparos_semanais(v['id'])
-    v['disparos_semanais'] = ds if ds else {dia: 0 for dia in ['segunda','terca','quarta','quinta','sexta','sabado','domingo']}
+    v['disparos_semanais'] = ds if ds else {
+        dia: 0 for dia in ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo']
+    }
 
     v['disparos_hoje'] = database.get_disparos_hoje(v['id']) or 0
     eventos_raw = []
